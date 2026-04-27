@@ -1,1 +1,0 @@
-export { ProtocolIcon } from "./ProtocolIcon";

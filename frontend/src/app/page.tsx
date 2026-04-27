@@ -1,5 +1,5 @@
-import { SupplyPage } from "@/components/pages/(supply)";
+import { DashboardPage } from "@/components/pages/(dashboard)";
 
 export default function Page() {
-  return <SupplyPage />;
+  return <DashboardPage />;
 }

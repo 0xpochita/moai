@@ -1,12 +1,9 @@
+export type { AgentAction, AgentActionType } from "./agent";
+export type { Network, NetworkId } from "./network";
 export type {
   FetchStatus,
-  Network,
-  NetworkId,
-  Pool,
-  PoolFilter,
-  PoolToken,
-  RiskTier,
-  Timeframe,
+  Position,
+  PositionStatus,
+  PositionToken,
   UniswapVersion,
-  YieldProjection,
-} from "./pool";
+} from "./position";

@@ -39,3 +39,17 @@ export function safeParseAmount(input: string): number {
   const value = Number.parseFloat(sanitized);
   return Number.isFinite(value) ? value : 0;
 }
+
+export function formatRelativeTime(timestampSec: number): string {
+  const nowSec = Date.now() / 1000;
+  const diff = Math.max(0, Math.round(nowSec - timestampSec));
+  if (diff < 60) return `${diff}s ago`;
+  if (diff < 3600) return `${Math.round(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.round(diff / 3600)}h ago`;
+  return `${Math.round(diff / 86400)}d ago`;
+}
+
+export function shortAddress(address: string): string {
+  if (!address || address.length < 10) return address;
+  return `${address.slice(0, 6)}…${address.slice(-4)}`;
+}
