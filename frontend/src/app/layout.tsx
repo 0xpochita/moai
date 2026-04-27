@@ -5,9 +5,7 @@ import { Web3Provider } from "@/components/providers";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Moai — Uniswap Pool Aggregator",
-  description:
-    "Discover, compare, and supply liquidity to Uniswap mainnet pools.",
+  title: "Moai",
 };
 
 export default function RootLayout({

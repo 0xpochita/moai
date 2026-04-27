@@ -8,11 +8,7 @@ type NavLink = {
   label: string;
 };
 
-const LINKS: NavLink[] = [
-  { id: "earn", label: "Earn" },
-  { id: "compare", label: "Compare" },
-  { id: "portfolio", label: "Portfolio" },
-];
+const LINKS: NavLink[] = [{ id: "earn", label: "Earn" }];
 
 export function NavbarLinks() {
   const [active, setActive] = useState<string>("earn");

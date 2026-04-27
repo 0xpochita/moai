@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { fetchPositionsForOwner, mockPositions } from "@/services/server";
+import { fetchPositionsOnChain, mockPositions } from "@/services/server";
 
 export const dynamic = "force-dynamic";
 
@@ -18,11 +18,10 @@ export async function GET(
     );
   }
 
-  const useMock =
-    new URL(request.url).searchParams.get("demo") === "1" ||
-    !process.env.THEGRAPH_API_KEY;
+  const url = new URL(request.url);
+  const forceDemo = url.searchParams.get("demo") === "1";
 
-  if (useMock) {
+  if (forceDemo) {
     return NextResponse.json({
       positions: mockPositions(address),
       source: "mock",
@@ -30,16 +29,16 @@ export async function GET(
   }
 
   try {
-    const positions = await fetchPositionsForOwner(address, request.signal);
-    if (positions.length === 0) {
-      return NextResponse.json({
-        positions: mockPositions(address),
-        source: "mock-fallback",
-      });
-    }
-    return NextResponse.json({ positions, source: "subgraph" });
+    const positions = await fetchPositionsOnChain(address, request.signal);
+    return NextResponse.json({
+      positions,
+      source: positions.length > 0 ? "onchain" : "empty",
+    });
   } catch (err) {
-    console.warn("[/api/positions] subgraph failed:", err);
+    if (request.signal.aborted) {
+      return NextResponse.json({ error: "aborted" }, { status: 499 });
+    }
+    console.warn("[/api/positions] on-chain failed:", err);
     return NextResponse.json({
       positions: mockPositions(address),
       source: "mock-fallback",
