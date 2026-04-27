@@ -52,11 +52,7 @@ export interface LiquidityAmounts {
   amount1: bigint;
 }
 
-function getAmount0(
-  sqrtA: bigint,
-  sqrtB: bigint,
-  liquidity: bigint,
-): bigint {
+function getAmount0(sqrtA: bigint, sqrtB: bigint, liquidity: bigint): bigint {
   let lo = sqrtA;
   let hi = sqrtB;
   if (lo > hi) [lo, hi] = [hi, lo];
@@ -64,11 +60,7 @@ function getAmount0(
   return (liquidity * Q96 * (hi - lo)) / hi / lo;
 }
 
-function getAmount1(
-  sqrtA: bigint,
-  sqrtB: bigint,
-  liquidity: bigint,
-): bigint {
+function getAmount1(sqrtA: bigint, sqrtB: bigint, liquidity: bigint): bigint {
   let lo = sqrtA;
   let hi = sqrtB;
   if (lo > hi) [lo, hi] = [hi, lo];

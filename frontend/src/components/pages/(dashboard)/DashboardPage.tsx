@@ -6,6 +6,7 @@ import { useAccount } from "wagmi";
 import { usePositionsStore } from "@/store";
 import { DelegationBanner } from "./DelegationBanner";
 import { DestinationsPanel } from "./DestinationsPanel";
+import { MigrationModal } from "./MigrationModal";
 import { PositionsGrid, PositionsHeader } from "./PositionsGrid";
 
 export function DashboardPage() {
@@ -38,6 +39,7 @@ export function DashboardPage() {
       <PositionsHeader />
       <PositionsGrid walletConnected={isConnected} />
       <DestinationsPanel />
+      <MigrationModal />
     </main>
   );
 }

@@ -1,8 +1,9 @@
 "use client";
 
-import { ArrowUpRight } from "lucide-react";
+import { ArrowRightLeft, ArrowUpRight } from "lucide-react";
 import { Badge, TokenPairLogos } from "@/components/ui";
 import { explorerAddressUrl, formatPercent, formatUsd } from "@/lib";
+import { useMigrationStore } from "@/store";
 import type { Position } from "@/types";
 import { PositionActivity } from "./PositionActivity";
 import { PositionNetworkPill } from "./PositionNetworkPill";
@@ -25,6 +26,12 @@ function formatStat(value: number): string {
 export function PositionCard({ position }: PositionCardProps) {
   const long0 = position.tokenLongName0 ?? position.token0.symbol;
   const long1 = position.tokenLongName1 ?? position.token1.symbol;
+  const startMigration = useMigrationStore((s) => s.start);
+  const isOutOfRange = position.status === "out-of-range";
+
+  const handleMigrate = () => {
+    void startMigration(position.owner, position.tokenId);
+  };
 
   return (
     <article className="bg-surface ring-card flex flex-col gap-4 rounded-2xl p-5 transition-all">
@@ -52,10 +59,7 @@ export function PositionCard({ position }: PositionCardProps) {
           label="Volume (24h)"
           value={formatStat(position.volume24hUsd)}
         />
-        <PrimaryStat
-          label="Pool TVL"
-          value={formatStat(position.poolTvlUsd)}
-        />
+        <PrimaryStat label="Pool TVL" value={formatStat(position.poolTvlUsd)} />
         <div>
           <PrimaryStat
             label="APR Range"
@@ -89,6 +93,17 @@ export function PositionCard({ position }: PositionCardProps) {
         </div>
         {position.delegated && <Badge tone="success">Delegated</Badge>}
       </div>
+
+      {isOutOfRange && (
+        <button
+          type="button"
+          onClick={handleMigrate}
+          className="bg-brand hover:bg-brand-hover inline-flex h-10 items-center justify-center gap-2 rounded-full text-xs font-semibold tracking-tight text-white transition-colors active:scale-[0.98]"
+        >
+          <ArrowRightLeft className="h-3.5 w-3.5" aria-hidden />
+          Migrate to Earn vault
+        </button>
+      )}
 
       <PositionActivity position={position} />
     </article>

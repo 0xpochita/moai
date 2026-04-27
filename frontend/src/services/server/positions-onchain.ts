@@ -638,11 +638,7 @@ async function enrichV4Position(
 
   let aprMin = 0;
   let aprMax = 0;
-  if (
-    poolStats &&
-    poolStats.tvlUsd > 0 &&
-    poolStats.volume24hUsd > 0
-  ) {
+  if (poolStats && poolStats.tvlUsd > 0 && poolStats.volume24hUsd > 0) {
     const dailyFees = poolStats.volume24hUsd * (feeTierPercent / 100);
     const apr = (dailyFees / poolStats.tvlUsd) * 365 * 100;
     aprMin = apr;
