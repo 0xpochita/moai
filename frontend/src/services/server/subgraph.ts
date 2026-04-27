@@ -225,6 +225,7 @@ function v3PoolToPool(
     risk: classifyRisk(tvlUsd, apy),
     feeTier: Number(raw.feeTier) / 10_000,
     volumeUsd1d: day ? Number(day.volumeUSD) : undefined,
+    fees24hUsd: day ? Number(day.feesUSD) : undefined,
     token0: toPoolToken(raw.token0, logos),
     token1: toPoolToken(raw.token1, logos),
     source: "subgraph",
@@ -266,6 +267,8 @@ function v2PairToPool(raw: V2Pair, logos: Map<string, string>): Pool {
     risk: classifyRisk(tvlUsd, apy),
     feeTier: V2_FEE_TIER_PERCENT,
     volumeUsd1d: dayVolume || undefined,
+    fees24hUsd:
+      dayVolume > 0 ? dayVolume * (V2_FEE_TIER_PERCENT / 100) : undefined,
     token0: toPoolToken(raw.token0, logos),
     token1: toPoolToken(raw.token1, logos),
     source: "subgraph",

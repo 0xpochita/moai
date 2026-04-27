@@ -18,6 +18,7 @@ export interface Network {
   label: string;
   chainName: string | null;
   accent: string;
+  logoUrl: string | null;
 }
 
 export interface PoolToken {
@@ -39,6 +40,7 @@ export interface Pool {
   risk: RiskTier;
   feeTier?: number;
   volumeUsd1d?: number;
+  fees24hUsd?: number;
   token0?: PoolToken;
   token1?: PoolToken;
   source: "subgraph" | "defillama";

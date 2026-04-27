@@ -54,7 +54,6 @@ export function SupplyStrategyReview() {
       </div>
 
       <div className="mt-2.5 flex items-center gap-1.5">
-        <ProtocolIcon protocol={pool.protocol} className="h-4 w-4 text-[8px]" />
         <span className="text-main text-xs font-semibold tracking-tight">
           Uniswap {pool.protocol}
         </span>
@@ -69,7 +68,7 @@ export function SupplyStrategyReview() {
               size="md"
             />
           ) : (
-            <ProtocolIcon protocol={pool.protocol} />
+            <ProtocolIcon protocol={pool.protocol} size="md" />
           )}
           <div>
             <div className="text-main text-xs font-semibold tracking-tight">
@@ -110,7 +109,12 @@ export function SupplyStrategyReview() {
           <Stat
             label="1D Volume"
             value={formatUsd(pool.volumeUsd1d, { compact: true })}
-            className="col-span-2"
+          />
+        )}
+        {pool.fees24hUsd !== undefined && (
+          <Stat
+            label="24H Fees"
+            value={formatUsd(pool.fees24hUsd, { compact: true })}
           />
         )}
       </div>

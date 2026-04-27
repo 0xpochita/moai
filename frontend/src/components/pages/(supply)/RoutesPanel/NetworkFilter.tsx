@@ -2,20 +2,9 @@
 
 import { Check, ChevronDown } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { NetworkIcon } from "@/components/ui";
 import { cn, getNetwork, NETWORKS } from "@/lib";
 import { usePoolsStore } from "@/store";
-import type { Network } from "@/types";
-
-function NetworkBadge({ network }: { network: Network }) {
-  return (
-    <span
-      style={{ backgroundColor: `${network.accent}1f`, color: network.accent }}
-      className="inline-flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-bold tracking-tight uppercase"
-    >
-      {network.id === "all" ? "·" : network.label.charAt(0)}
-    </span>
-  );
-}
 
 export function NetworkFilter() {
   const network = usePoolsStore((s) => s.filter.network);
@@ -43,7 +32,7 @@ export function NetworkFilter() {
         aria-expanded={open}
         className="bg-elevated text-main hover:bg-brand-soft inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] font-medium tracking-tight transition-colors"
       >
-        <NetworkBadge network={active} />
+        <NetworkIcon network={active} size={16} />
         <span className="hidden sm:inline">{active.label}</span>
         <ChevronDown
           className={cn(
@@ -58,7 +47,7 @@ export function NetworkFilter() {
         <div
           role="listbox"
           aria-label="Filter by network"
-          className="bg-surface ring-card absolute right-0 z-20 mt-1.5 flex w-48 flex-col gap-0.5 rounded-2xl p-1.5"
+          className="bg-surface ring-card absolute right-0 z-20 mt-1.5 flex w-52 flex-col gap-0.5 rounded-2xl p-1.5"
         >
           {NETWORKS.map((n) => {
             const selected = n.id === network;
@@ -80,7 +69,7 @@ export function NetworkFilter() {
                 )}
               >
                 <span className="flex items-center gap-2">
-                  <NetworkBadge network={n} />
+                  <NetworkIcon network={n} size={20} />
                   {n.label}
                 </span>
                 {selected && <Check className="h-3.5 w-3.5" aria-hidden />}

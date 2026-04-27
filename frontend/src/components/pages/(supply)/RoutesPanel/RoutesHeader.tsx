@@ -46,7 +46,7 @@ export function RoutesHeader() {
             Pool Aggregator
           </div>
           <div className="text-muted mt-0.5 text-[10px]">
-            {filtered.length} of {totalPools} pools via Uniswap subgraph
+            {filtered.length} of {totalPools} pools across Uniswap chains
           </div>
         </div>
       </div>
