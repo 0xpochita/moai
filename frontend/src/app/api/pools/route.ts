@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   fetchDefiLlamaPools,
+  fetchUniswapExplorePools,
   fetchUniswapSubgraphPools,
   isSubgraphConfigured,
 } from "@/services/server";
@@ -14,6 +15,13 @@ const CACHE_HEADERS = {
 
 export async function GET(request: Request) {
   const signal = request.signal;
+
+  const explorePromise = fetchUniswapExplorePools(undefined, 25, signal).catch(
+    (err) => {
+      console.warn("[/api/pools] uniswap explore failed:", err);
+      return [] as Pool[];
+    },
+  );
 
   const subgraphPromise = isSubgraphConfigured()
     ? fetchUniswapSubgraphPools(50, signal).catch((err) => {
@@ -31,7 +39,8 @@ export async function GET(request: Request) {
     return [] as Pool[];
   });
 
-  const [ethereumPools, otherChainPools] = await Promise.all([
+  const [explore, subgraph, defillama] = await Promise.all([
+    explorePromise,
     subgraphPromise,
     defillamaPromise,
   ]);
@@ -40,24 +49,31 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "aborted" }, { status: 499 });
   }
 
-  let merged = [...ethereumPools, ...otherChainPools];
+  const map = new Map<string, Pool>();
+  for (const p of defillama) map.set(p.id.toLowerCase(), p);
+  for (const p of subgraph) map.set(p.id.toLowerCase(), p);
+  for (const p of explore) map.set(p.id.toLowerCase(), p);
 
-  if (merged.length === 0) {
-    try {
-      merged = await fetchDefiLlamaPools(signal, { limit: 100 });
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Pool feed unavailable";
-      return NextResponse.json({ error: message }, { status: 502 });
-    }
+  const pools = Array.from(map.values())
+    .sort((a, b) => b.tvlUsd - a.tvlUsd)
+    .slice(0, 100);
+
+  if (pools.length === 0) {
+    return NextResponse.json(
+      { error: "all pool sources unavailable" },
+      { status: 502 },
+    );
   }
 
-  const pools = merged.sort((a, b) => b.tvlUsd - a.tvlUsd).slice(0, 100);
-
-  const sources = {
-    subgraph: ethereumPools.length,
-    defillama: otherChainPools.length,
-  };
-
-  return NextResponse.json({ pools, sources }, { headers: CACHE_HEADERS });
+  return NextResponse.json(
+    {
+      pools,
+      sources: {
+        explore: explore.length,
+        subgraph: subgraph.length,
+        defillama: defillama.length,
+      },
+    },
+    { headers: CACHE_HEADERS },
+  );
 }

@@ -9,3 +9,4 @@ export {
   type CheckApprovalResponse,
   checkApprovalUpstream,
 } from "./uniswap";
+export { fetchUniswapExplorePools } from "./uniswap-graphql";

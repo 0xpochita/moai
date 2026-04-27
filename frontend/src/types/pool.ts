@@ -43,7 +43,7 @@ export interface Pool {
   fees24hUsd?: number;
   token0?: PoolToken;
   token1?: PoolToken;
-  source: "subgraph" | "defillama";
+  source: "subgraph" | "defillama" | "uniswap-explore";
 }
 
 export interface PoolFilter {
