@@ -1,26 +1,118 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-main: #ffffff;
+  --color-surface: #ffffff;
+  --color-surface-elevated: #fdf6fa;
+  --color-foreground: #0b0e1a;
+  --color-muted: #6b7283;
+  --color-muted-soft: #aab1bd;
+  --color-brand: #ff007a;
+  --color-brand-hover: #d91b6b;
+  --color-brand-soft: #ffe0ee;
+  --color-success: #16a34a;
+  --color-success-soft: #dcfce7;
+  --color-warning: #d97706;
+  --color-warning-soft: #fef3c7;
+  --color-border-soft: rgba(11, 14, 26, 0.04);
+  --color-border-strong: rgba(255, 0, 122, 0.18);
+
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui,
+    sans-serif;
+  --font-display:
+    -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", system-ui,
+    sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer utilities {
+  .bg-main {
+    background-color: var(--color-main);
+  }
+  .bg-surface {
+    background-color: var(--color-surface);
+  }
+  .bg-elevated {
+    background-color: var(--color-surface-elevated);
+  }
+  .bg-brand {
+    background-color: var(--color-brand);
+  }
+  .bg-brand-soft {
+    background-color: var(--color-brand-soft);
+  }
+  .bg-success-soft {
+    background-color: var(--color-success-soft);
+  }
+  .bg-warning-soft {
+    background-color: var(--color-warning-soft);
+  }
+  .text-main {
+    color: var(--color-foreground);
+  }
+  .text-muted {
+    color: var(--color-muted);
+  }
+  .text-muted-soft {
+    color: var(--color-muted-soft);
+  }
+  .text-brand {
+    color: var(--color-brand);
+  }
+  .text-success {
+    color: var(--color-success);
+  }
+  .text-warning {
+    color: var(--color-warning);
+  }
+  .border-main {
+    border-color: var(--color-border-soft);
+  }
+  .border-strong {
+    border-color: var(--color-border-strong);
+  }
+  .hover\:bg-brand-hover:hover {
+    background-color: var(--color-brand-hover);
+  }
+  .hover\:bg-brand-soft:hover {
+    background-color: var(--color-brand-soft);
+  }
+  .hover\:bg-elevated:hover {
+    background-color: var(--color-surface-elevated);
+  }
+  .ring-soft {
+    box-shadow: 0 1px 2px rgba(11, 14, 26, 0.04);
+  }
+  .ring-card {
+    box-shadow:
+      0 1px 2px rgba(11, 14, 26, 0.04),
+      0 4px 12px rgba(255, 0, 122, 0.04);
   }
 }
 
+html,
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--color-main);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+input,
+select {
+  font-family: inherit;
+  color: inherit;
+}
+
+select option {
+  background-color: var(--color-surface);
+  color: var(--color-foreground);
 }
