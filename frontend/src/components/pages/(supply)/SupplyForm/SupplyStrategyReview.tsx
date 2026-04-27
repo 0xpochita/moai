@@ -3,7 +3,7 @@
 import { ExternalLink } from "lucide-react";
 import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { Badge, ProtocolIcon, Skeleton } from "@/components/ui";
+import { Badge, ProtocolIcon, Skeleton, TokenPairLogos } from "@/components/ui";
 import { formatPercent, formatUsd, RISK_LABEL, RISK_TONE } from "@/lib";
 import { selectFilteredPools, usePoolsStore, useSupplyStore } from "@/store";
 import type { Pool } from "@/types";
@@ -62,7 +62,15 @@ export function SupplyStrategyReview() {
 
       <div className="bg-surface ring-soft mt-2.5 flex items-center justify-between rounded-xl p-2.5">
         <div className="flex items-center gap-2">
-          <ProtocolIcon protocol={pool.protocol} />
+          {pool.token0 && pool.token1 ? (
+            <TokenPairLogos
+              token0={pool.token0}
+              token1={pool.token1}
+              size="md"
+            />
+          ) : (
+            <ProtocolIcon protocol={pool.protocol} />
+          )}
           <div>
             <div className="text-main text-xs font-semibold tracking-tight">
               {pool.symbol}
@@ -83,11 +91,28 @@ export function SupplyStrategyReview() {
         </a>
       </div>
 
+      {pool.token0 && pool.token1 && (
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <TokenAddressChip token={pool.token0} />
+          <TokenAddressChip token={pool.token1} />
+        </div>
+      )}
+
       <div className="mt-2.5 grid grid-cols-2 gap-2">
         <Stat label="APY" value={formatPercent(pool.apy)} accent />
         <Stat label="TVL" value={formatUsd(pool.tvlUsd, { compact: true })} />
         <Stat label="30D avg APY" value={formatPercent(pool.apyMean30d)} />
-        <Stat label="Risk" value={RISK_LABEL[pool.risk]} />
+        <Stat
+          label="Fee tier"
+          value={pool.feeTier !== undefined ? `${pool.feeTier}%` : "—"}
+        />
+        {pool.volumeUsd1d !== undefined && (
+          <Stat
+            label="1D Volume"
+            value={formatUsd(pool.volumeUsd1d, { compact: true })}
+            className="col-span-2"
+          />
+        )}
       </div>
     </div>
   );
@@ -97,13 +122,15 @@ function Stat({
   label,
   value,
   accent = false,
+  className,
 }: {
   label: string;
   value: string;
   accent?: boolean;
+  className?: string;
 }) {
   return (
-    <div className="bg-surface ring-soft rounded-xl p-2.5">
+    <div className={`bg-surface ring-soft rounded-xl p-2.5 ${className ?? ""}`}>
       <div className="text-muted text-[10px] font-medium tracking-wide uppercase">
         {label}
       </div>
@@ -113,5 +140,31 @@ function Stat({
         {value}
       </div>
     </div>
+  );
+}
+
+function shortAddress(address: string): string {
+  return `${address.slice(0, 6)}…${address.slice(-4)}`;
+}
+
+function TokenAddressChip({
+  token,
+}: {
+  token: { symbol: string; address: string };
+}) {
+  return (
+    <a
+      href={`https://etherscan.io/address/${token.address}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="bg-surface ring-soft hover:bg-brand-soft flex items-center justify-between rounded-xl px-2.5 py-1.5 text-[10px] transition-colors"
+    >
+      <span className="text-muted font-medium tracking-wide uppercase">
+        {token.symbol}
+      </span>
+      <span className="text-main font-mono font-medium tracking-tight">
+        {shortAddress(token.address)}
+      </span>
+    </a>
   );
 }

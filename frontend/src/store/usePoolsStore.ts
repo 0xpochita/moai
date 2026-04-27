@@ -1,7 +1,9 @@
 import { create } from "zustand";
+import { getNetwork } from "@/lib";
 import { fetchUniswapMainnetPools } from "@/services";
 import type {
   FetchStatus,
+  NetworkId,
   Pool,
   PoolFilter,
   RiskTier,
@@ -18,9 +20,14 @@ interface PoolsState {
   retry: () => Promise<void>;
   setProtocol: (protocol: UniswapVersion | "all") => void;
   setRisk: (risk: RiskTier | "all") => void;
+  setNetwork: (network: NetworkId) => void;
 }
 
-const INITIAL_FILTER: PoolFilter = { protocol: "all", risk: "all" };
+const INITIAL_FILTER: PoolFilter = {
+  protocol: "all",
+  risk: "all",
+  network: "all",
+};
 
 export const usePoolsStore = create<PoolsState>((set, get) => ({
   pools: [],
@@ -54,14 +61,18 @@ export const usePoolsStore = create<PoolsState>((set, get) => ({
   setProtocol: (protocol) =>
     set((state) => ({ filter: { ...state.filter, protocol } })),
   setRisk: (risk) => set((state) => ({ filter: { ...state.filter, risk } })),
+  setNetwork: (network) =>
+    set((state) => ({ filter: { ...state.filter, network } })),
 }));
 
 export function selectFilteredPools(state: PoolsState): Pool[] {
   const { pools, filter } = state;
+  const networkChain = getNetwork(filter.network).chainName;
   return pools.filter((pool) => {
     if (filter.protocol !== "all" && pool.protocol !== filter.protocol)
       return false;
     if (filter.risk !== "all" && pool.risk !== filter.risk) return false;
+    if (networkChain && pool.chain !== networkChain) return false;
     return true;
   });
 }

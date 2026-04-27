@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, ExternalLink } from "lucide-react";
-import { Badge, ProtocolIcon } from "@/components/ui";
+import { Badge, ProtocolIcon, TokenPairLogos } from "@/components/ui";
 import { cn, formatPercent, formatUsd, RISK_LABEL, RISK_TONE } from "@/lib";
 import { useSupplyStore } from "@/store";
 import type { Pool } from "@/types";
@@ -27,17 +27,27 @@ export function RouteCard({ pool, isBest }: RouteCardProps) {
       aria-pressed={isSelected}
     >
       <div className="flex items-center gap-3">
-        <ProtocolIcon protocol={pool.protocol} />
+        {pool.token0 && pool.token1 ? (
+          <TokenPairLogos token0={pool.token0} token1={pool.token1} size="sm" />
+        ) : (
+          <ProtocolIcon protocol={pool.protocol} />
+        )}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             <span className="text-main truncate text-xs font-semibold tracking-tight">
-              Uniswap {pool.protocol}
+              {pool.symbol}
             </span>
             <ExternalLink className="text-muted h-3 w-3 shrink-0" aria-hidden />
             {isBest && <Badge tone="neutral">Best</Badge>}
           </div>
-          <div className="text-muted mt-0.5 truncate text-[10px]">
-            {pool.symbol} · {pool.chain}
+          <div className="text-muted mt-0.5 flex items-center gap-1.5 truncate text-[10px]">
+            <span>Uniswap {pool.protocol}</span>
+            {pool.feeTier !== undefined && (
+              <span className="bg-surface text-muted rounded-md px-1 py-0.5 text-[9px] font-medium">
+                {pool.feeTier}%
+              </span>
+            )}
+            <span>· {pool.chain}</span>
           </div>
         </div>
 

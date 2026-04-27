@@ -1,3 +1,5 @@
+const TRADING_API_BASE = "https://trade-api.gateway.uniswap.org/v1";
+
 export interface CheckApprovalRequest {
   walletAddress: string;
   token: string;
@@ -41,29 +43,34 @@ function assertValidRequest(req: CheckApprovalRequest): void {
   }
 }
 
-export async function checkApproval(
+export async function checkApprovalUpstream(
   req: CheckApprovalRequest,
   signal?: AbortSignal,
-): Promise<CheckApprovalResponse> {
+): Promise<{
+  status: number;
+  data: CheckApprovalResponse & { detail?: string };
+}> {
   assertValidRequest(req);
 
-  const res = await fetch("/api/uniswap/check_approval", {
+  const apiKey = process.env.UNISWAP_API;
+  if (!apiKey) {
+    throw new Error("UNISWAP_API is not set");
+  }
+
+  const res = await fetch(`${TRADING_API_BASE}/check_approval`, {
     method: "POST",
     signal,
-    headers: { "content-type": "application/json" },
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": apiKey,
+      "x-universal-router-version": "2.0",
+    },
     body: JSON.stringify(req),
   });
 
   const data = (await res.json()) as CheckApprovalResponse & {
-    error?: string;
     detail?: string;
   };
 
-  if (!res.ok) {
-    const message =
-      data.error ?? data.detail ?? `check_approval failed (${res.status})`;
-    throw new Error(message);
-  }
-
-  return data;
+  return { status: res.status, data };
 }
