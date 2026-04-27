@@ -12,8 +12,14 @@ type PositionCardProps = {
 };
 
 function formatAprRange(min: number, max: number): string {
+  if (max <= 0) return "—";
   if (Math.abs(min - max) < 0.001) return formatPercent(max, 2);
   return `${formatPercent(min, 2)} - ${formatPercent(max, 2)}`;
+}
+
+function formatStat(value: number): string {
+  if (value <= 0) return "—";
+  return formatUsd(value, { compact: true });
 }
 
 export function PositionCard({ position }: PositionCardProps) {
@@ -44,11 +50,11 @@ export function PositionCard({ position }: PositionCardProps) {
       <div className="grid grid-cols-3 gap-3">
         <PrimaryStat
           label="Volume (24h)"
-          value={formatUsd(position.volume24hUsd, { compact: true })}
+          value={formatStat(position.volume24hUsd)}
         />
         <PrimaryStat
           label="Pool TVL"
-          value={formatUsd(position.poolTvlUsd, { compact: true })}
+          value={formatStat(position.poolTvlUsd)}
         />
         <div>
           <PrimaryStat
