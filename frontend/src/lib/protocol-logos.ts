@@ -68,5 +68,7 @@ export function formatProtocolName(raw: string): string {
   if (!raw) return raw;
   const lower = raw.toLowerCase();
   const stripped = lower.replace(/-v\d+$/, "");
-  return FRIENDLY_NAMES[stripped] ?? FRIENDLY_NAMES[lower] ?? titleCase(stripped);
+  return (
+    FRIENDLY_NAMES[stripped] ?? FRIENDLY_NAMES[lower] ?? titleCase(stripped)
+  );
 }
