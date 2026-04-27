@@ -13,3 +13,4 @@ export {
   getNetwork,
   NETWORKS,
 } from "./networks";
+export { formatProtocolName, getProtocolLogoUrl } from "./protocol-logos";

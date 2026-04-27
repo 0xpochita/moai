@@ -1,4 +1,5 @@
 export type { AgentAction, AgentActionType } from "./agent";
+export type { DestinationVault, PortfolioPosition } from "./destination";
 export type { Network, NetworkId } from "./network";
 export type {
   FetchStatus,

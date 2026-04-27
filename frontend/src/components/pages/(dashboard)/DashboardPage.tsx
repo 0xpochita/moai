@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { toast } from "sonner";
 import { useAccount } from "wagmi";
 import { usePositionsStore } from "@/store";
+import { DestinationsPanel } from "./DestinationsPanel";
 import { PositionsGrid, PositionsHeader } from "./PositionsGrid";
 
 export function DashboardPage() {
@@ -34,6 +35,7 @@ export function DashboardPage() {
     <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-6 md:px-6">
       <PositionsHeader />
       <PositionsGrid walletConnected={isConnected} />
+      <DestinationsPanel />
     </main>
   );
 }
