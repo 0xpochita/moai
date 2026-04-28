@@ -30,6 +30,11 @@ export default function RootLayout({
               color: "var(--color-foreground)",
               boxShadow: "0 8px 24px rgba(255, 0, 122, 0.06)",
             },
+            classNames: {
+              title: "moai-toast-title",
+              description: "moai-toast-description",
+              actionButton: "moai-toast-action",
+            },
           }}
         />
       </body>

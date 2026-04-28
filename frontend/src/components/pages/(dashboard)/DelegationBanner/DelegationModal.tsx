@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  CheckCircle2,
   KeyRound,
   Loader2,
   Send,
@@ -15,7 +14,7 @@ import type { Hex } from "viem";
 import { useAccount, usePublicClient } from "wagmi";
 import { useShallow } from "zustand/react/shallow";
 import { RiskProfilePicker } from "@/components/pages/(dashboard)/SettingsPanel";
-import { MotionModal } from "@/components/ui";
+import { MotionModal, SuccessAnimation } from "@/components/ui";
 import { getCaliburHookAddress, shortAddress, toastTx } from "@/lib";
 import { CALIBUR_DOMAIN_SALT, CALIBUR_SINGLETON } from "@/lib/calibur";
 import { buildRegistration, relayAgent } from "@/services";
@@ -340,8 +339,8 @@ export function DelegationModal({ open, onClose }: DelegationModalProps) {
         )}
 
         {step === "active" && (
-          <div className="bg-success-soft flex flex-col items-center gap-3 rounded-xl p-6 text-center">
-            <CheckCircle2 className="text-success h-6 w-6" aria-hidden />
+          <div className="bg-success-soft flex flex-col items-center gap-2 rounded-xl p-6 text-center">
+            <SuccessAnimation size={140} loop />
             <div className="text-main text-sm font-semibold tracking-tight">
               Agent active
             </div>

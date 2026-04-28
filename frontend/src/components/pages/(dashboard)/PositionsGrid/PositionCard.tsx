@@ -117,7 +117,7 @@ export function PositionCard({ position }: PositionCardProps) {
             />
           </span>
           <span className="flex items-center gap-1.5">
-            Migrate to Earn vault
+            Migrate Position
           </span>
           <span className="bg-white inline-flex h-7 items-center justify-center rounded-full px-2.5">
             <Image

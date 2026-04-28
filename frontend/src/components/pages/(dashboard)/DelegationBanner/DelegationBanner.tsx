@@ -3,6 +3,7 @@
 import { ShieldCheck, Sparkles } from "lucide-react";
 import { useEffect } from "react";
 import { usePublicClient, useWalletClient } from "wagmi";
+import { AgentInactiveAnimation } from "@/components/ui";
 import { getCaliburHookAddress, shortAddress } from "@/lib";
 import { useAgentStatusStore, useDelegationStore, useUiStore } from "@/store";
 import { DelegationModal } from "./DelegationModal";
@@ -58,11 +59,15 @@ export function DelegationBanner() {
 
   return (
     <>
-      <section className="bg-brand-soft ring-card flex flex-col gap-3 rounded-2xl p-4 md:flex-row md:items-center md:justify-between">
-        <div className="flex items-start gap-3">
-          <span className="bg-brand inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl text-white">
-            <ShieldCheck className="h-5 w-5" aria-hidden />
-          </span>
+      <section className="bg-linear-to-r from-[#fff0f6] to-[#ffe4ee] ring-card relative flex flex-col gap-3 overflow-hidden rounded-2xl p-4 md:flex-row md:items-center md:justify-between">
+        <span
+          aria-hidden
+          className="bg-brand/5 pointer-events-none absolute -top-12 -right-12 h-40 w-40 rounded-full blur-2xl"
+        />
+        <div className="relative flex items-center gap-3">
+          <div className="shrink-0">
+            <AgentInactiveAnimation size={72} />
+          </div>
           <div>
             <div className="text-main flex items-center gap-2 text-sm font-semibold tracking-tight">
               <Sparkles className="text-brand h-3.5 w-3.5" aria-hidden />

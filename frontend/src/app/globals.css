@@ -127,3 +127,17 @@ select option {
   background-color: var(--color-surface);
   color: var(--color-foreground);
 }
+
+/* Sonner toasts: force readable text colors regardless of theme defaults */
+.moai-toast-title {
+  color: var(--color-foreground);
+  font-weight: 600;
+}
+.moai-toast-description {
+  color: var(--color-muted);
+}
+.moai-toast-action {
+  background-color: var(--color-foreground) !important;
+  color: var(--color-surface) !important;
+  border-radius: 9999px !important;
+}

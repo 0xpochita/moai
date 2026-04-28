@@ -1,10 +1,11 @@
 "use client";
 
-import { Loader2, Power, Radio, ShieldCheck } from "lucide-react";
+import { AlertTriangle, Loader2, Power } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import type { Hex } from "viem";
 import { useAccount, usePublicClient } from "wagmi";
+import { AgentActiveAnimation, MotionModal } from "@/components/ui";
 import { formatRelativeTime, toastTx } from "@/lib";
 import { CALIBUR_DOMAIN_SALT } from "@/lib/calibur";
 import { buildRevocation, relayAgent } from "@/services";
@@ -73,6 +74,7 @@ export function AgentStatusBar() {
     RISK_PROFILES.find((r) => r.key === riskProfile) ?? RISK_PROFILES[1];
 
   const [busy, setBusy] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   // Truth: agent is "active" only when on-chain status confirms BOTH
   // Calibur delegation + agent key registered.
@@ -119,6 +121,7 @@ export function AgentStatusBar() {
 
   const handleRevoke = async () => {
     if (!publicClient || !address) return;
+    setConfirmOpen(false);
     setBusy(true);
     try {
       // Stop polling first.
@@ -193,17 +196,17 @@ export function AgentStatusBar() {
   };
 
   return (
-    <section className="bg-elevated ring-card flex flex-col gap-3 rounded-2xl p-4 md:flex-row md:items-center md:justify-between">
-      <div className="flex items-start gap-3">
-        <span className="bg-brand text-white inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl">
-          {isSubscribed ? (
-            <Radio className="h-4 w-4" aria-hidden />
-          ) : (
-            <ShieldCheck className="h-4 w-4" aria-hidden />
-          )}
-        </span>
+    <section className="bg-linear-to-r from-[#fff5f9] to-[#fde8f1] ring-card relative flex flex-col gap-3 overflow-hidden rounded-2xl p-4 md:flex-row md:items-center md:justify-between">
+      <span
+        aria-hidden
+        className="bg-brand/5 pointer-events-none absolute -top-12 -right-12 h-40 w-40 rounded-full blur-2xl"
+      />
+      <div className="relative flex items-center gap-3">
+        <div className="shrink-0">
+          <AgentActiveAnimation size={72} />
+        </div>
         <div className="min-w-0">
-          <div className="text-main flex items-center gap-2 text-sm font-semibold tracking-tight">
+          <div className="text-main flex flex-wrap items-center gap-2 text-sm font-semibold tracking-tight">
             Agent active
             <span className="bg-brand-soft text-brand inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium tracking-wide uppercase">
               <span className="bg-brand h-1.5 w-1.5 animate-pulse rounded-full" />
@@ -214,9 +217,9 @@ export function AgentStatusBar() {
             </span>
           </div>
           <p className="text-muted mt-1 text-xs leading-snug">
-            MOAI is monitoring your positions. When one goes out-of-range it
-            migrates funds to the best Li.Fi Earn vault for your risk profile.
-            The agent never holds your balance.
+            MOAI is monitoring your positions and migrating out-of-range LP into
+            the best Li.Fi Earn vault for your risk profile. Funds never leave
+            your wallet.
           </p>
           {isSubscribed && (
             <div className="text-muted-soft mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px]">
@@ -239,9 +242,9 @@ export function AgentStatusBar() {
 
       <button
         type="button"
-        onClick={handleRevoke}
+        onClick={() => setConfirmOpen(true)}
         disabled={busy}
-        className="bg-surface text-danger ring-soft hover:bg-danger-soft inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-full px-3 text-[11px] font-semibold tracking-tight transition-colors active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+        className="bg-surface text-danger ring-soft hover:bg-danger-soft relative inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-full px-3 text-[11px] font-semibold tracking-tight transition-colors active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
       >
         {busy ? (
           <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
@@ -250,6 +253,52 @@ export function AgentStatusBar() {
         )}
         Revoke
       </button>
+
+      <MotionModal
+        open={confirmOpen}
+        onClose={() => !busy && setConfirmOpen(false)}
+        ariaLabel="Confirm revoke"
+      >
+        <div className="bg-surface ring-card mx-auto flex w-full max-w-sm flex-col gap-4 rounded-2xl p-5">
+          <div className="flex items-start gap-3">
+            <span className="bg-danger-soft text-danger inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl">
+              <AlertTriangle className="h-5 w-5" aria-hidden />
+            </span>
+            <div className="min-w-0">
+              <div className="text-main text-base font-semibold tracking-tight">
+                Revoke agent?
+              </div>
+              <p className="text-muted mt-1 text-xs leading-snug">
+                MOAI will stop monitoring your positions. You'll need to
+                delegate again to re-enable auto-migrations.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setConfirmOpen(false)}
+              disabled={busy}
+              className="bg-elevated text-main ring-soft hover:bg-brand-soft inline-flex h-10 items-center justify-center rounded-full px-4 text-xs font-semibold tracking-tight transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleRevoke}
+              disabled={busy}
+              className="bg-danger hover:bg-danger/90 inline-flex h-10 items-center justify-center gap-1.5 rounded-full px-4 text-xs font-semibold tracking-tight text-white transition-colors active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {busy ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+              ) : (
+                <Power className="h-3.5 w-3.5" aria-hidden />
+              )}
+              Revoke
+            </button>
+          </div>
+        </div>
+      </MotionModal>
     </section>
   );
 }

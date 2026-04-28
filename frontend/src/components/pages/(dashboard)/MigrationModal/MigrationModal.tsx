@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, Loader2, ShieldCheck, Sparkles, X } from "lucide-react";
+import { Loader2, ShieldCheck, Sparkles, X } from "lucide-react";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { useAccount } from "wagmi";
@@ -9,6 +9,7 @@ import {
   MotionModal,
   ProtocolAvatar,
   Skeleton,
+  SuccessAnimation,
   TokenPairLogos,
 } from "@/components/ui";
 import {
@@ -27,24 +28,27 @@ import {
   useUiStore,
 } from "@/store";
 
-const STRATEGY_COPY: Record<RiskProfile, { headline: string; detail: string }> =
-  {
-    conservative: {
-      headline: "Conservative Agent strategy",
-      detail:
-        "Routing to the highest-TVL bluechip (Aave · Compound · Lido). Yield capped for capital safety.",
-    },
-    balanced: {
-      headline: "Balanced Agent strategy",
-      detail:
-        "Picking the best APY among Morpho · Aave · Compound. Default risk-adjusted route.",
-    },
-    aggressive: {
-      headline: "Aggressive Agent strategy",
-      detail:
-        "Maximizing APY across Pendle · Ethena · Yearn · Euler · EtherFi. Higher reward, higher risk.",
-    },
-  };
+const STRATEGY_COPY: Record<
+  RiskProfile,
+  { headline: string; detail: string; protocols: string[] }
+> = {
+  conservative: {
+    headline: "Conservative Agent strategy",
+    detail:
+      "Routing to the highest-TVL bluechip. Yield capped for capital safety.",
+    protocols: ["aave", "compound", "lido"],
+  },
+  balanced: {
+    headline: "Balanced Agent strategy",
+    detail: "Picking the best APY across blue-chips. Default risk-adjusted route.",
+    protocols: ["morpho", "aave", "compound"],
+  },
+  aggressive: {
+    headline: "Aggressive Agent strategy",
+    detail: "Maximizing APY across yield protocols. Higher reward, higher risk.",
+    protocols: ["pendle", "ethena", "yearn", "euler", "etherfi"],
+  },
+};
 import { MigrationLegItem } from "./MigrationLegItem";
 
 export function MigrationModal() {
@@ -155,17 +159,28 @@ export function MigrationModal() {
         {(ready || status === "executing" || status === "complete") && plan && (
           <>
             {!isWithdraw && (
-              <section className="bg-brand-soft/40 ring-soft flex items-start gap-3 rounded-xl px-4 py-3 ring-1">
+              <section className="bg-brand-soft/40 ring-soft flex items-center gap-3 rounded-xl px-4 py-3 ring-1">
                 <span className="bg-brand text-white inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full">
                   <Sparkles className="h-3.5 w-3.5" aria-hidden />
                 </span>
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <div className="text-main text-xs font-semibold tracking-tight">
                     {strategy.headline}
                   </div>
                   <div className="text-muted mt-0.5 text-[11px] leading-snug">
                     {strategy.detail}
                   </div>
+                </div>
+                <div className="flex shrink-0 items-center -space-x-1.5">
+                  {strategy.protocols.map((p) => (
+                    <span
+                      key={p}
+                      title={formatProtocolName(p)}
+                      className="bg-surface inline-flex items-center justify-center overflow-hidden rounded-full ring-2 ring-white"
+                    >
+                      <ProtocolAvatar protocolName={p} size={22} />
+                    </span>
+                  ))}
                 </div>
               </section>
             )}
@@ -359,8 +374,8 @@ export function MigrationModal() {
           ))}
 
         {status === "complete" && (
-          <div className="bg-success-soft text-success flex items-center justify-center gap-2 rounded-full py-3 text-sm font-semibold tracking-tight">
-            <CheckCircle2 className="h-4 w-4" aria-hidden />
+          <div className="bg-success-soft text-success flex flex-col items-center gap-1 rounded-xl py-4 text-sm font-semibold tracking-tight">
+            <SuccessAnimation size={120} loop />
             {isWithdraw ? "Withdrawal submitted" : "Migration submitted"}
           </div>
         )}

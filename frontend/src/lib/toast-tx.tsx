@@ -30,7 +30,11 @@ export function toastTx({ title, txHash, description }: ToastTxOptions) {
             target="_blank"
             rel="noopener noreferrer"
             onClick={() => toast.dismiss(id)}
-            className="bg-main text-surface hover:bg-main/90 inline-flex h-9 items-center justify-center rounded-full text-xs font-semibold tracking-tight transition-colors active:scale-[0.98]"
+            style={{
+              backgroundColor: "var(--color-foreground)",
+              color: "var(--color-surface)",
+            }}
+            className="hover:opacity-90 inline-flex h-9 items-center justify-center rounded-full text-xs font-semibold tracking-tight transition-opacity active:scale-[0.98]"
           >
             View on BaseScan
           </a>
