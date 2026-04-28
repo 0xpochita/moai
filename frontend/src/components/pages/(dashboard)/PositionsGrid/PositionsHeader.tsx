@@ -1,9 +1,12 @@
 "use client";
 
+import { ArrowUpRight, Plus } from "lucide-react";
 import Image from "next/image";
 import { useShallow } from "zustand/react/shallow";
 import { formatUsd } from "@/lib";
 import { selectTotals, usePositionsStore } from "@/store";
+
+const CREATE_V4_URL = "https://app.uniswap.org/positions/create/v4";
 
 export function PositionsHeader() {
   const totals = usePositionsStore(useShallow(selectTotals));
@@ -24,13 +27,28 @@ export function PositionsHeader() {
           Your Position on Uniswap Liquidity Pool
         </h1>
       </div>
-      <div className="flex items-center gap-6">
+      <div className="flex items-center gap-4 md:gap-6">
         <Stat
           label="Yield / day"
           value={formatUsd(totals.totalYieldDayUsd)}
           accent
         />
         <Stat label="Total value" value={formatUsd(totals.totalValueUsd)} />
+        <a
+          href={CREATE_V4_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="bg-brand hover:bg-brand-hover group inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full pr-3 pl-2 text-xs font-semibold tracking-tight text-white shadow-sm transition-all active:scale-[0.98]"
+        >
+          <span className="bg-white/15 inline-flex h-7 w-7 items-center justify-center rounded-full">
+            <Plus className="h-3.5 w-3.5" aria-hidden />
+          </span>
+          New position
+          <ArrowUpRight
+            className="h-3 w-3 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
+            aria-hidden
+          />
+        </a>
       </div>
     </header>
   );
