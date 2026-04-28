@@ -91,6 +91,12 @@
   .hover\:bg-elevated:hover {
     background-color: var(--color-surface-elevated);
   }
+  .hover\:text-main:hover {
+    color: var(--color-foreground);
+  }
+  .hover\:text-brand:hover {
+    color: var(--color-brand);
+  }
   .ring-soft {
     box-shadow: 0 1px 2px rgba(11, 14, 26, 0.04);
   }

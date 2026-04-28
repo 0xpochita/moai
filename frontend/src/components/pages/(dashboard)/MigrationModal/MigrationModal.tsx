@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { useAccount } from "wagmi";
 import {
   Badge,
+  MigrationPlanAnimation,
   MotionModal,
   ProtocolAvatar,
   Skeleton,
@@ -106,8 +107,8 @@ export function MigrationModal() {
       <div className="bg-surface ring-card relative mx-auto flex w-full max-w-md flex-col gap-4 rounded-2xl p-5">
         <header className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2">
-            <span className="bg-brand-soft text-brand inline-flex h-9 w-9 items-center justify-center rounded-2xl">
-              <ShieldCheck className="h-5 w-5" aria-hidden />
+            <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center">
+              <MigrationPlanAnimation size={48} />
             </span>
             <div>
               <div className="text-muted text-[10px] font-medium tracking-wide uppercase">
@@ -124,7 +125,7 @@ export function MigrationModal() {
             type="button"
             aria-label="Close"
             onClick={closing}
-            className="text-muted hover:text-main h-8 w-8 inline-flex items-center justify-center rounded-full transition-colors"
+            className="text-muted hover:bg-elevated hover:text-main h-8 w-8 inline-flex items-center justify-center rounded-full transition-colors"
           >
             <X className="h-4 w-4" aria-hidden />
           </button>

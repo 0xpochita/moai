@@ -7,6 +7,7 @@ export { Skeleton } from "./Skeleton";
 export {
   AgentActiveAnimation,
   AgentInactiveAnimation,
+  MigrationPlanAnimation,
   SuccessAnimation,
 } from "./SuccessAnimation";
 export { TokenPairLogos } from "./TokenPairLogos";

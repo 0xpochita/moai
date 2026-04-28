@@ -4,6 +4,7 @@ import Lottie from "lottie-react";
 import successAnimation from "../../../../public/Assets/Animation/success-animation.json";
 import agentActive from "../../../../public/Assets/Animation/agent-active.json";
 import agentInactive from "../../../../public/Assets/Animation/agent-unactive.json";
+import migrationPlan from "../../../../public/Assets/Animation/migration-plan-logo.json";
 
 type LottieIconProps = {
   size?: number;
@@ -42,6 +43,20 @@ export function AgentInactiveAnimation({
   return (
     <Lottie
       animationData={agentInactive}
+      loop={loop}
+      autoplay
+      style={{ height: size, width: size }}
+    />
+  );
+}
+
+export function MigrationPlanAnimation({
+  size = 36,
+  loop = true,
+}: LottieIconProps) {
+  return (
+    <Lottie
+      animationData={migrationPlan}
       loop={loop}
       autoplay
       style={{ height: size, width: size }}
