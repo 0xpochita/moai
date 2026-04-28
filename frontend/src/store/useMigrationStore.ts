@@ -1,19 +1,17 @@
-import type { Address, Hex, WalletClient } from "viem";
+import type { Hex } from "viem";
 import { create } from "zustand";
 import {
-  getGuardedHookAddress,
-  type HookCall,
-  submitMigrationBatch,
-} from "@/lib";
-import { fetchMigrationPlan, fetchWithdrawalPlan } from "@/services";
+  fetchMigrationPlan,
+  fetchWithdrawalPlan,
+  migrateNow,
+  withdrawNow,
+} from "@/services";
 import type { MigrationPlan, MigrationStatus } from "@/types";
 import { useAgentActionsStore } from "./useAgentActionsStore";
 import { useSettingsStore } from "./useSettingsStore";
 
-const BASE_CHAIN_ID = 8453;
-
 interface ExecuteParams {
-  walletClient?: WalletClient | null;
+  owner?: string | null;
 }
 
 interface MigrationState {
@@ -23,31 +21,13 @@ interface MigrationState {
   controller: AbortController | null;
   open: boolean;
   txHash: Hex | null;
+  /// vault address (for withdrawals) — needed when re-submitting via agent.
+  withdrawalTarget: string | null;
   start: (owner: string, tokenId: string) => Promise<void>;
   startWithdrawal: (owner: string, vaultAddress: string) => Promise<void>;
   cancel: () => void;
   execute: (params?: ExecuteParams) => Promise<void>;
   dismiss: () => void;
-}
-
-function legsToHookCalls(plan: MigrationPlan): HookCall[] {
-  const calls: HookCall[] = [];
-  for (const leg of plan.legs) {
-    if (!leg.calldata) continue;
-    calls.push({
-      target: leg.targetAddress as Address,
-      value: leg.value ? BigInt(leg.value) : 0n,
-      data: leg.calldata as Hex,
-    });
-  }
-  return calls;
-}
-
-function randomMockTxHash(): Hex {
-  const hex = Array.from({ length: 64 }, () =>
-    Math.floor(Math.random() * 16).toString(16),
-  ).join("");
-  return `0x${hex}` as Hex;
 }
 
 export const useMigrationStore = create<MigrationState>((set, get) => ({
@@ -57,6 +37,7 @@ export const useMigrationStore = create<MigrationState>((set, get) => ({
   controller: null,
   open: false,
   txHash: null,
+  withdrawalTarget: null,
   start: async (owner, tokenId) => {
     const { controller } = get();
     controller?.abort();
@@ -68,6 +49,7 @@ export const useMigrationStore = create<MigrationState>((set, get) => ({
       controller: next,
       open: true,
       txHash: null,
+      withdrawalTarget: null,
     });
     try {
       const riskProfile = useSettingsStore.getState().riskProfile;
@@ -95,6 +77,7 @@ export const useMigrationStore = create<MigrationState>((set, get) => ({
       controller: next,
       open: true,
       txHash: null,
+      withdrawalTarget: vaultAddress,
     });
     try {
       const plan = await fetchWithdrawalPlan(owner, vaultAddress, next.signal);
@@ -116,46 +99,50 @@ export const useMigrationStore = create<MigrationState>((set, get) => ({
       controller: null,
       open: false,
       txHash: null,
+      withdrawalTarget: null,
     });
   },
   execute: async (params) => {
-    const { plan } = get();
+    const { plan, withdrawalTarget } = get();
     if (!plan) return;
+    if (!params?.owner) {
+      set({ status: "error", error: "Wallet not connected" });
+      return;
+    }
     set({ status: "executing", error: null });
 
-    const hookAddress = getGuardedHookAddress();
-    const walletClient = params?.walletClient ?? null;
-    const calls = legsToHookCalls(plan);
-    const canSubmit = Boolean(
-      walletClient && hookAddress && calls.length === plan.legs.length,
-    );
-
     try {
-      let txHash: Hex;
-      if (canSubmit && walletClient) {
-        txHash = await submitMigrationBatch({
-          walletClient,
-          calls,
-          chainId: BASE_CHAIN_ID,
-        });
-      } else {
-        await new Promise((resolve) => setTimeout(resolve, 1200));
-        txHash = randomMockTxHash();
-      }
-
+      const owner = params.owner;
       const agentActions = useAgentActionsStore.getState();
+      let txHash: Hex;
+
       if (plan.intent === "withdraw") {
+        if (!withdrawalTarget) throw new Error("Missing vault address");
+        const result = await withdrawNow({
+          owner,
+          vaultAddress: withdrawalTarget,
+        });
+        txHash = result.txHash;
         agentActions.recordWithdrawal(plan.source.pair, txHash);
       } else {
+        const riskProfile = useSettingsStore.getState().riskProfile;
+        const result = await migrateNow({
+          owner,
+          tokenId: plan.positionTokenId,
+          riskProfile,
+        });
+        txHash = result.txHash;
         agentActions.recordMigration(
           plan.positionTokenId,
           `${plan.destination.protocolName} ${plan.destination.name}`,
           txHash,
         );
       }
+
       set({ status: "complete", txHash });
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Migration failed";
+      const message =
+        err instanceof Error ? err.message : "Agent execution failed";
       set({ status: "error", error: message });
     }
   },
@@ -166,6 +153,7 @@ export const useMigrationStore = create<MigrationState>((set, get) => ({
       error: null,
       open: false,
       txHash: null,
+      withdrawalTarget: null,
     });
   },
 }));

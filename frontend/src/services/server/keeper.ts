@@ -1,13 +1,12 @@
-import {
-  type Address,
-  createWalletClient,
-  encodeFunctionData,
-  type Hex,
-  http,
-} from "viem";
-import { privateKeyToAccount } from "viem/accounts";
-import { base } from "viem/chains";
+import type { Address, Hex } from "viem";
+import type { CaliburCall } from "@/lib/calibur";
 import type { AgentAction, MigrationPlan } from "@/types";
+import {
+  buildAgentBatch,
+  isAgentRegistered,
+  relaySignedBatch,
+  signAsAgent,
+} from "./calibur";
 import {
   isCoolingDown,
   listSubscriptions,
@@ -19,28 +18,6 @@ import {
 import { fetchPortfolio, fetchVaults } from "./lifi-earn";
 import { buildMigrationPlan } from "./migration-planner";
 import { fetchPositionsOnChain } from "./positions-onchain";
-
-const BASE_CHAIN_ID = 8453;
-
-const HOOK_EXECUTE_ABI = [
-  {
-    name: "execute",
-    type: "function",
-    stateMutability: "payable",
-    inputs: [
-      {
-        name: "calls",
-        type: "tuple[]",
-        components: [
-          { name: "target", type: "address" },
-          { name: "value", type: "uint256" },
-          { name: "data", type: "bytes" },
-        ],
-      },
-    ],
-    outputs: [],
-  },
-] as const;
 
 interface MigrationOutcome {
   type:
@@ -61,22 +38,17 @@ const ROTATION_APY_DELTA_PCT = Number(
   process.env.KEEPER_ROTATION_APY_DELTA_PCT ?? "0.5",
 );
 
-function getKeeperWallet() {
+function isKeeperConfigured(): boolean {
   const pk = process.env.KEEPER_PRIVATE_KEY;
-  if (!pk || !/^0x[0-9a-fA-F]{64}$/.test(pk)) return null;
-  const account = privateKeyToAccount(pk as Hex);
-  const transport = http(
-    process.env.BASE_RPC_URL ?? "https://mainnet.base.org",
-  );
-  return createWalletClient({ account, chain: base, transport });
+  return Boolean(pk && /^0x[0-9a-fA-F]{64}$/.test(pk));
 }
 
-function planLegsToHookCalls(plan: MigrationPlan) {
-  const calls: { target: Address; value: bigint; data: Hex }[] = [];
+function planLegsToCaliburCalls(plan: MigrationPlan): CaliburCall[] {
+  const calls: CaliburCall[] = [];
   for (const leg of plan.legs) {
     if (!leg.calldata) continue;
     calls.push({
-      target: leg.targetAddress as Address,
+      to: leg.targetAddress as Address,
       value: leg.value ? BigInt(leg.value) : 0n,
       data: leg.calldata as Hex,
     });
@@ -191,26 +163,24 @@ async function processSubscription(
       continue;
     }
 
-    const calls = planLegsToHookCalls(plan);
-    const hookAddress = process.env.NEXT_PUBLIC_GUARDED_HOOK_ADDRESS;
-    const wallet = getKeeperWallet();
+    const calls = planLegsToCaliburCalls(plan);
     const destination = `${plan.destination.protocolName} ${plan.destination.name}`;
+    const canExecute =
+      isKeeperConfigured() &&
+      calls.length === plan.legs.length &&
+      (await isAgentRegistered(ownerAddress as Address));
 
-    if (hookAddress && wallet && calls.length === plan.legs.length) {
+    if (canExecute) {
       try {
-        const calldata = encodeFunctionData({
-          abi: HOOK_EXECUTE_ABI,
-          functionName: "execute",
-          args: [calls],
+        const { typedData, signedBatchedCall } = await buildAgentBatch({
+          userEoa: ownerAddress as Address,
+          calls,
         });
-        const totalValue = calls.reduce((sum, c) => sum + c.value, 0n);
-        const txHash = await wallet.sendTransaction({
-          account: wallet.account,
-          chain: wallet.chain,
-          to: ownerAddress as Address,
-          data: calldata,
-          value: totalValue,
-          chainId: BASE_CHAIN_ID,
+        const signature = await signAsAgent(typedData);
+        const txHash = await relaySignedBatch({
+          userEoa: ownerAddress as Address,
+          signedBatchedCall,
+          signature,
         });
 
         recordActivity(
@@ -261,7 +231,7 @@ async function processSubscription(
           ownerAddress,
           type: "migrate",
           title: "Auto-migrate detected",
-          description: `Out-of-range #${position.tokenId} ready for ${destination}. Click "Migrate" to sign.`,
+          description: `Out-of-range #${position.tokenId} ready for ${destination}. Agent not registered yet — delegate first.`,
           destination,
           positionTokenId: position.tokenId,
         }),

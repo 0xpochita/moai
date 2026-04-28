@@ -3,8 +3,10 @@
 import { Loader2, Power, Radio, ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import type { Hex } from "viem";
 import { useAccount, usePublicClient, useWalletClient } from "wagmi";
-import { formatRelativeTime, revokeDelegation } from "@/lib";
+import { formatRelativeTime } from "@/lib";
+import { buildRevocation, relayAgent } from "@/services";
 import {
   RISK_PROFILES,
   useDelegationStore,
@@ -72,7 +74,7 @@ export function AgentStatusBar() {
   const isSubscribed = Boolean(subscription);
 
   const handleRevoke = async () => {
-    if (!walletClient || !publicClient) return;
+    if (!walletClient || !publicClient || !address) return;
     setBusy(true);
     try {
       if (isSubscribed) {
@@ -80,10 +82,42 @@ export function AgentStatusBar() {
           // tolerate keeper offline
         });
       }
-      const txHash = await revokeDelegation(walletClient, BASE_CHAIN_ID);
+      // User signs an EIP-712 batch that revokes the agent key on Calibur.
+      // Relayer pays gas to submit it.
+      const envelope = await buildRevocation(address);
+      const message = {
+        batchedCall: {
+          calls: envelope.signedBatchedCall.batchedCall.calls.map((c) => ({
+            to: c.to as `0x${string}`,
+            value: BigInt(c.value),
+            data: c.data as Hex,
+          })),
+          revertOnFailure:
+            envelope.signedBatchedCall.batchedCall.revertOnFailure,
+        },
+        nonce: BigInt(envelope.signedBatchedCall.nonce),
+        keyHash: envelope.signedBatchedCall.keyHash as Hex,
+        executor: envelope.signedBatchedCall.executor as `0x${string}`,
+        deadline: BigInt(envelope.signedBatchedCall.deadline),
+      };
+      // biome-ignore lint/suspicious/noExplicitAny: viem typed-data generics
+      const sig = (await walletClient.signTypedData({
+        account: walletClient.account!,
+        domain: envelope.typedData.domain,
+        types: envelope.typedData.types,
+        primaryType: envelope.typedData.primaryType,
+        message,
+      } as any)) as Hex;
+
+      const relay = await relayAgent({
+        owner: address,
+        signedBatchedCall: envelope.signedBatchedCall,
+        signature: sig,
+      });
+
       markNotDelegated();
-      toast("Delegation revoked", {
-        description: `Tx ${txHash.slice(0, 10)}… submitted on Base.`,
+      toast("Agent revoked", {
+        description: `Tx ${relay.txHash.slice(0, 10)}… submitted on Base.`,
       });
     } catch (err) {
       const message =

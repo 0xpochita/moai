@@ -14,6 +14,15 @@ export function getGuardedHookAddress(): Address | null {
   return raw as Address;
 }
 
+export function getCaliburHookAddress(): Address | null {
+  const raw =
+    process.env.NEXT_PUBLIC_CALIBUR_HOOK_ADDRESS ??
+    process.env.NEXT_PUBLIC_GUARDED_HOOK_ADDRESS;
+  if (!raw) return null;
+  if (!/^0x[a-fA-F0-9]{40}$/.test(raw)) return null;
+  return raw as Address;
+}
+
 export function parseDelegationCode(code: string): Address | null {
   if (!code || code === "0x") return null;
   const lower = code.toLowerCase();

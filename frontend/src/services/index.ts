@@ -1,4 +1,16 @@
 export {
+  type BuildEnvelopeResult,
+  buildRegistration,
+  buildRevocation,
+  type JsonSignedBatchedCall,
+  type MigrateNowResult,
+  migrateNow,
+  type RelayResult,
+  relayAgent,
+  type WithdrawNowResult,
+  withdrawNow,
+} from "./agent";
+export {
   type FetchDestinationsParams,
   fetchDestinations,
   fetchPortfolioForWallet,

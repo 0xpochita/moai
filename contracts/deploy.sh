@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
-# Deploy GuardedExecutorHook to Base mainnet (or Sepolia with --sepolia).
+# Deploy a hook contract to Base mainnet (or Sepolia with --sepolia).
 #
 # Usage:
-#   ./deploy.sh              # deploy to Base mainnet
-#   ./deploy.sh --sepolia    # deploy to Base Sepolia (testnet rehearsal)
-#   ./deploy.sh --dry-run    # simulate without broadcasting (no funds spent)
+#   ./deploy.sh                       # deploy GuardedExecutorHook (legacy)
+#   ./deploy.sh --calibur             # deploy CaliburExecutionHook (Calibur-compatible)
+#   ./deploy.sh --calibur --sepolia   # Calibur hook on Base Sepolia
+#   ./deploy.sh --calibur --dry-run   # simulate without broadcasting
 #
 # Reads PRIVATE_KEY, BASE_RPC_URL / BASE_SEPOLIA_RPC_URL, and BASESCAN_API_KEY
-# from .env (gitignored). Will refuse to run if .env is missing.
+# from .env.local (preferred) or .env (gitignored). Refuses to run without one.
 
 set -euo pipefail
 
@@ -35,7 +36,7 @@ source "$ENV_FILE"
 set +a
 
 if [ -z "${PRIVATE_KEY:-}" ] || [ "$PRIVATE_KEY" = "0x_64_hex_chars_here" ]; then
-  echo "✗ PRIVATE_KEY is empty or still the placeholder. Edit contracts/.env."
+  echo "✗ PRIVATE_KEY is empty or still the placeholder. Edit $ENV_FILE."
   exit 1
 fi
 
@@ -43,9 +44,15 @@ NETWORK="base"
 RPC="${BASE_RPC_URL:-https://mainnet.base.org}"
 BROADCAST="--broadcast"
 VERIFY="--verify --etherscan-api-key ${BASESCAN_API_KEY:-}"
+SCRIPT="script/DeployHook.s.sol"
+LABEL="GuardedExecutorHook"
 
 for arg in "$@"; do
   case "$arg" in
+    --calibur)
+      SCRIPT="script/DeployCaliburHook.s.sol"
+      LABEL="CaliburExecutionHook"
+      ;;
     --sepolia)
       NETWORK="base-sepolia"
       RPC="${BASE_SEPOLIA_RPC_URL:-https://sepolia.base.org}"
@@ -56,15 +63,16 @@ for arg in "$@"; do
       ;;
     *)
       echo "✗ Unknown arg: $arg"
-      echo "  Allowed: --sepolia, --dry-run"
+      echo "  Allowed: --calibur, --sepolia, --dry-run"
       exit 1
       ;;
   esac
 done
 
-echo "→ Deploying GuardedExecutorHook"
+echo "→ Deploying $LABEL"
 echo "  network : $NETWORK"
 echo "  rpc     : $RPC"
+echo "  script  : $SCRIPT"
 echo "  mode    : ${BROADCAST:+broadcast}${BROADCAST:-dry-run}${VERIFY:+ + verify}"
 echo
 
@@ -73,7 +81,7 @@ forge test >/dev/null
 echo "✓ forge test passes"
 
 # shellcheck disable=SC2086
-forge script script/DeployHook.s.sol \
+forge script "$SCRIPT" \
   --rpc-url "$RPC" \
   $BROADCAST \
   $VERIFY

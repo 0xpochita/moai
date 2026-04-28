@@ -1,6 +1,7 @@
 export { cn } from "./classnames";
 export {
   type DelegationStatus,
+  getCaliburHookAddress,
   getGuardedHookAddress,
   parseDelegationCode,
   readDelegationStatus,

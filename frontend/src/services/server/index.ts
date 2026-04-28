@@ -1,4 +1,16 @@
 export {
+  type BuildRegistrationBatchResult,
+  buildAgentBatch,
+  buildRegistrationBatch,
+  buildRegistrationCalls,
+  getAgentInfo,
+  getCaliburHookAddress,
+  isAgentRegistered,
+  relaySignedBatch,
+  signAsAgent,
+  wrapSignature,
+} from "./calibur";
+export {
   APPROVE_MAX,
   type BurnV4Args,
   encodeApproveCalldata,

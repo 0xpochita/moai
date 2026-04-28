@@ -3,7 +3,7 @@
 import { CheckCircle2, Loader2, ShieldCheck, X } from "lucide-react";
 import { useEffect } from "react";
 import { toast } from "sonner";
-import { useAccount, useWalletClient } from "wagmi";
+import { useAccount } from "wagmi";
 import {
   Badge,
   MotionModal,
@@ -19,10 +19,7 @@ import {
 } from "@/store";
 import { MigrationLegItem } from "./MigrationLegItem";
 
-const BASE_CHAIN_ID = 8453;
-
 export function MigrationModal() {
-  const { data: walletClient } = useWalletClient({ chainId: BASE_CHAIN_ID });
   const open = useMigrationStore((s) => s.open);
   const status = useMigrationStore((s) => s.status);
   const plan = useMigrationStore((s) => s.plan);
@@ -35,7 +32,7 @@ export function MigrationModal() {
   const { address } = useAccount();
 
   const handleExecute = () => {
-    void execute({ walletClient: walletClient ?? null });
+    void execute({ owner: address ?? null });
   };
 
   useEffect(() => {
@@ -236,7 +233,7 @@ export function MigrationModal() {
             ) : (
               <>
                 <ShieldCheck className="h-4 w-4" aria-hidden />
-                {isWithdraw ? "Sign & withdraw" : "Sign & migrate"}
+                {isWithdraw ? "Confirm withdrawal" : "Confirm migration"}
               </>
             )}
           </button>
