@@ -1,7 +1,8 @@
 "use client";
 
 import { CheckCircle2, Loader2, ShieldCheck, X } from "lucide-react";
-import { useEffect } from "react";
+import Image from "next/image";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useAccount } from "wagmi";
 import {
@@ -16,6 +17,7 @@ import {
   formatPercent,
   formatProtocolName,
   formatUsd,
+  getLocalTokenLogo,
 } from "@/lib";
 import {
   useHoldingsStore,
@@ -31,6 +33,7 @@ export function MigrationModal() {
   const plan = useMigrationStore((s) => s.plan);
   const error = useMigrationStore((s) => s.error);
   const txHash = useMigrationStore((s) => s.txHash);
+  const withdrawalTarget = useMigrationStore((s) => s.withdrawalTarget);
   const cancel = useMigrationStore((s) => s.cancel);
   const execute = useMigrationStore((s) => s.execute);
   const dismiss = useMigrationStore((s) => s.dismiss);
@@ -84,7 +87,8 @@ export function MigrationModal() {
   const closing = status === "complete" ? dismiss : cancel;
   const ready = status === "ready" && plan !== null;
   const busy = status === "planning" || status === "executing";
-  const isWithdraw = plan?.intent === "withdraw";
+  const isWithdraw =
+    plan?.intent === "withdraw" || withdrawalTarget !== null;
 
   return (
     <MotionModal open={open} onClose={closing} ariaLabel="Migrate position">
@@ -145,23 +149,42 @@ export function MigrationModal() {
           <>
             <section className="bg-brand-soft/50 flex items-center justify-between gap-3 rounded-xl px-4 py-3">
               <div className="flex min-w-0 items-center gap-3">
-                <div className="relative flex shrink-0 items-center">
-                  {plan.source.token0 && (
-                    <TokenPairLogos
-                      token0={plan.source.token0}
-                      token1={plan.source.token1 ?? plan.source.token0}
-                      size="sm"
+                {isWithdraw ? (
+                  <div className="relative shrink-0">
+                    <ProtocolAvatar
+                      protocolName={plan.source.protocolLogoKey ?? "Vault"}
+                      size={32}
                     />
-                  )}
-                  {plan.source.protocolLogoKey && (
                     <span className="bg-surface ring-soft absolute -right-1 -bottom-1 inline-flex h-4 w-4 items-center justify-center overflow-hidden rounded-full">
-                      <ProtocolAvatar
-                        protocolName={plan.source.protocolLogoKey}
-                        size={16}
+                      <Image
+                        src="/Assets/Images/logo-brand/base-logo.jpg"
+                        alt="Base"
+                        width={16}
+                        height={16}
+                        className="object-cover"
+                        unoptimized
                       />
                     </span>
-                  )}
-                </div>
+                  </div>
+                ) : (
+                  <div className="relative flex shrink-0 items-center">
+                    {plan.source.token0 && (
+                      <TokenPairLogos
+                        token0={plan.source.token0}
+                        token1={plan.source.token1 ?? plan.source.token0}
+                        size="sm"
+                      />
+                    )}
+                    {plan.source.protocolLogoKey && (
+                      <span className="bg-surface ring-soft absolute -right-1 -bottom-1 inline-flex h-4 w-4 items-center justify-center overflow-hidden rounded-full">
+                        <ProtocolAvatar
+                          protocolName={plan.source.protocolLogoKey}
+                          size={16}
+                        />
+                      </span>
+                    )}
+                  </div>
+                )}
                 <div className="min-w-0">
                   <div className="text-muted text-[10px] font-medium tracking-wide uppercase">
                     From
@@ -190,10 +213,30 @@ export function MigrationModal() {
 
             <section className="bg-success-soft/40 flex items-center justify-between gap-3 rounded-xl px-4 py-3">
               <div className="flex min-w-0 items-center gap-3">
-                <ProtocolAvatar
-                  protocolName={plan.destination.protocolName}
-                  size={32}
-                />
+                <div className="relative shrink-0">
+                  {isWithdraw ? (
+                    <DestinationTokenLogo
+                      address={plan.destination.underlyingTokenAddress}
+                      symbol={plan.destination.underlyingTokenSymbol}
+                      size={32}
+                    />
+                  ) : (
+                    <ProtocolAvatar
+                      protocolName={plan.destination.protocolName}
+                      size={32}
+                    />
+                  )}
+                  <span className="bg-surface ring-soft absolute -right-1 -bottom-1 inline-flex h-4 w-4 items-center justify-center overflow-hidden rounded-full">
+                    <Image
+                      src="/Assets/Images/logo-brand/base-logo.jpg"
+                      alt="Base"
+                      width={16}
+                      height={16}
+                      className="object-cover"
+                      unoptimized
+                    />
+                  </span>
+                </div>
                 <div className="min-w-0">
                   <div className="text-muted text-[10px] font-medium tracking-wide uppercase">
                     To
@@ -202,8 +245,9 @@ export function MigrationModal() {
                     {plan.destination.name}
                   </div>
                   <div className="text-muted truncate text-[10px]">
-                    {formatProtocolName(plan.destination.protocolName)} ·{" "}
-                    {plan.destination.underlyingTokenSymbol}
+                    {isWithdraw
+                      ? `${plan.destination.underlyingTokenSymbol} · Base`
+                      : `${formatProtocolName(plan.destination.protocolName)} · ${plan.destination.underlyingTokenSymbol}`}
                   </div>
                 </div>
               </div>
@@ -300,6 +344,61 @@ export function MigrationModal() {
         )}
       </div>
     </MotionModal>
+  );
+}
+
+function DestinationTokenLogo({
+  address,
+  symbol,
+  size,
+}: {
+  address: string;
+  symbol: string;
+  size: number;
+}) {
+  const local = getLocalTokenLogo(address);
+  const remote = `https://dd.dexscreener.com/ds-data/tokens/base/${address.toLowerCase()}.png`;
+  return <FallbackImage src={local ?? remote} alt={symbol} size={size} />;
+}
+
+function FallbackImage({
+  src,
+  alt,
+  size,
+}: {
+  src: string;
+  alt: string;
+  size: number;
+}) {
+  const [errored, setErrored] = useState(false);
+  if (errored) return <SymbolBadge symbol={alt} size={size} />;
+  return (
+    <span
+      style={{ height: size, width: size }}
+      className="bg-surface ring-soft inline-flex items-center justify-center overflow-hidden rounded-full"
+    >
+      <Image
+        src={src}
+        alt={alt}
+        width={size}
+        height={size}
+        style={{ height: size, width: size }}
+        className="object-cover"
+        onError={() => setErrored(true)}
+        unoptimized
+      />
+    </span>
+  );
+}
+
+function SymbolBadge({ symbol, size }: { symbol: string; size: number }) {
+  return (
+    <span
+      style={{ height: size, width: size }}
+      className="bg-brand-soft text-brand inline-flex items-center justify-center rounded-full text-[10px] font-bold tracking-tight uppercase"
+    >
+      {symbol.slice(0, 2)}
+    </span>
   );
 }
 
