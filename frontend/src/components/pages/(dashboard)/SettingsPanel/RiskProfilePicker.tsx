@@ -34,7 +34,7 @@ export function RiskProfilePicker({ variant = "stacked" }: Props) {
             className={`flex flex-col gap-1 rounded-xl px-3 py-2.5 text-left transition-colors ring-1 ${
               active
                 ? "bg-brand-soft text-brand ring-brand"
-                : "bg-elevated text-muted ring-transparent hover:bg-brand-soft/40 hover:text-main hover:ring-brand-soft"
+                : "bg-elevated text-muted ring-transparent hover:text-muted-soft"
             }`}
           >
             <div className="flex items-center gap-2">

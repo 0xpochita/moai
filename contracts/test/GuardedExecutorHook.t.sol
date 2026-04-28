@@ -20,8 +20,14 @@ contract GuardedExecutorHookTest is Test {
     GuardedExecutorHook hook;
     MockTarget target;
 
+    address constant ALLOWED_SPENDER = address(0xC0FFEE);
+    address constant DENIED_SPENDER = address(0xBAD);
+
     bytes4 constant BUMP_SELECTOR = bytes4(keccak256("bump()"));
-    bytes4 constant TRANSFER_SELECTOR = bytes4(keccak256("transfer(address,uint256)"));
+    bytes4 constant TRANSFER_SELECTOR =
+        bytes4(keccak256("transfer(address,uint256)"));
+    bytes4 constant ERC20_APPROVE = 0x095ea7b3;
+    bytes4 constant PERMIT2_APPROVE = 0x87517c45;
 
     function setUp() public {
         target = new MockTarget();
@@ -33,7 +39,10 @@ contract GuardedExecutorHookTest is Test {
             selector: BUMP_SELECTOR
         });
 
-        hook = new GuardedExecutorHook(entries);
+        address[] memory spenders = new address[](1);
+        spenders[0] = ALLOWED_SPENDER;
+
+        hook = new GuardedExecutorHook(entries, spenders);
     }
 
     function test_allowed_returns_true_for_whitelisted() public view {
@@ -46,7 +55,8 @@ contract GuardedExecutorHookTest is Test {
     }
 
     function test_validate_passes_for_whitelisted_call() public view {
-        GuardedExecutorHook.Call[] memory calls = new GuardedExecutorHook.Call[](1);
+        GuardedExecutorHook.Call[] memory calls =
+            new GuardedExecutorHook.Call[](1);
         calls[0] = GuardedExecutorHook.Call({
             target: address(target),
             value: 0,
@@ -56,7 +66,8 @@ contract GuardedExecutorHookTest is Test {
     }
 
     function test_validate_reverts_for_disallowed_selector() public {
-        GuardedExecutorHook.Call[] memory calls = new GuardedExecutorHook.Call[](1);
+        GuardedExecutorHook.Call[] memory calls =
+            new GuardedExecutorHook.Call[](1);
         calls[0] = GuardedExecutorHook.Call({
             target: address(target),
             value: 0,
@@ -73,7 +84,8 @@ contract GuardedExecutorHookTest is Test {
     }
 
     function test_validate_reverts_for_unknown_target() public {
-        GuardedExecutorHook.Call[] memory calls = new GuardedExecutorHook.Call[](1);
+        GuardedExecutorHook.Call[] memory calls =
+            new GuardedExecutorHook.Call[](1);
         calls[0] = GuardedExecutorHook.Call({
             target: address(0xdead),
             value: 0,
@@ -90,7 +102,8 @@ contract GuardedExecutorHookTest is Test {
     }
 
     function test_validate_reverts_on_empty_calldata() public {
-        GuardedExecutorHook.Call[] memory calls = new GuardedExecutorHook.Call[](1);
+        GuardedExecutorHook.Call[] memory calls =
+            new GuardedExecutorHook.Call[](1);
         calls[0] = GuardedExecutorHook.Call({
             target: address(target),
             value: 0,
@@ -102,8 +115,102 @@ contract GuardedExecutorHookTest is Test {
         hook.validate(calls);
     }
 
+    // ─── ERC20.approve permissive (any token) ──────────────────────────
+
+    function test_validate_passes_erc20_approve_to_allowed_spender() public view {
+        GuardedExecutorHook.Call[] memory calls =
+            new GuardedExecutorHook.Call[](1);
+        // Note: target is an arbitrary address (any token); only spender matters.
+        calls[0] = GuardedExecutorHook.Call({
+            target: address(0xCAFE),
+            value: 0,
+            data: abi.encodeWithSelector(ERC20_APPROVE, ALLOWED_SPENDER, type(uint256).max)
+        });
+        hook.validate(calls);
+    }
+
+    function test_validate_reverts_erc20_approve_to_denied_spender() public {
+        GuardedExecutorHook.Call[] memory calls =
+            new GuardedExecutorHook.Call[](1);
+        calls[0] = GuardedExecutorHook.Call({
+            target: address(0xCAFE),
+            value: 0,
+            data: abi.encodeWithSelector(ERC20_APPROVE, DENIED_SPENDER, type(uint256).max)
+        });
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                GuardedExecutorHook.SpenderNotAllowed.selector,
+                DENIED_SPENDER
+            )
+        );
+        hook.validate(calls);
+    }
+
+    function test_validate_reverts_erc20_approve_truncated_calldata() public {
+        GuardedExecutorHook.Call[] memory calls =
+            new GuardedExecutorHook.Call[](1);
+        calls[0] = GuardedExecutorHook.Call({
+            target: address(0xCAFE),
+            value: 0,
+            data: abi.encodePacked(ERC20_APPROVE, uint128(0)) // too short
+        });
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                GuardedExecutorHook.CallNotAllowed.selector,
+                address(0xCAFE),
+                ERC20_APPROVE
+            )
+        );
+        hook.validate(calls);
+    }
+
+    // ─── Permit2.approve(token, spender, amount, expiration) ───────────
+
+    function test_validate_passes_permit2_approve_to_allowed_spender() public view {
+        GuardedExecutorHook.Call[] memory calls =
+            new GuardedExecutorHook.Call[](1);
+        calls[0] = GuardedExecutorHook.Call({
+            target: address(0xBEEF),
+            value: 0,
+            data: abi.encodeWithSelector(
+                PERMIT2_APPROVE,
+                address(0x1111),
+                ALLOWED_SPENDER,
+                uint160(1_000_000),
+                uint48(block.timestamp + 1 days)
+            )
+        });
+        hook.validate(calls);
+    }
+
+    function test_validate_reverts_permit2_approve_to_denied_spender() public {
+        GuardedExecutorHook.Call[] memory calls =
+            new GuardedExecutorHook.Call[](1);
+        calls[0] = GuardedExecutorHook.Call({
+            target: address(0xBEEF),
+            value: 0,
+            data: abi.encodeWithSelector(
+                PERMIT2_APPROVE,
+                address(0x1111),
+                DENIED_SPENDER,
+                uint160(1_000_000),
+                uint48(block.timestamp + 1 days)
+            )
+        });
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                GuardedExecutorHook.SpenderNotAllowed.selector,
+                DENIED_SPENDER
+            )
+        );
+        hook.validate(calls);
+    }
+
+    // ─── Execute path ──────────────────────────────────────────────────
+
     function test_execute_runs_whitelisted_call() public {
-        GuardedExecutorHook.Call[] memory calls = new GuardedExecutorHook.Call[](2);
+        GuardedExecutorHook.Call[] memory calls =
+            new GuardedExecutorHook.Call[](2);
         calls[0] = GuardedExecutorHook.Call({
             target: address(target),
             value: 0,
@@ -119,7 +226,8 @@ contract GuardedExecutorHookTest is Test {
     }
 
     function test_execute_reverts_on_disallowed_call_in_batch() public {
-        GuardedExecutorHook.Call[] memory calls = new GuardedExecutorHook.Call[](2);
+        GuardedExecutorHook.Call[] memory calls =
+            new GuardedExecutorHook.Call[](2);
         calls[0] = GuardedExecutorHook.Call({
             target: address(target),
             value: 0,
