@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import type { Hex } from "viem";
 import { useAccount, usePublicClient } from "wagmi";
-import { explorerTxUrl, formatRelativeTime } from "@/lib";
+import { formatRelativeTime, toastTx } from "@/lib";
 import { CALIBUR_DOMAIN_SALT } from "@/lib/calibur";
 import { buildRevocation, relayAgent } from "@/services";
 import {
@@ -179,18 +179,9 @@ export function AgentStatusBar() {
 
       markNotDelegated();
       await refreshAgentStatus(address);
-      toast("Agent revoked", {
-        description: `Tx ${relay.txHash.slice(0, 10)}… on Base.`,
-        action: {
-          label: "View on BaseScan",
-          onClick: () => {
-            window.open(
-              explorerTxUrl("base", relay.txHash),
-              "_blank",
-              "noopener,noreferrer",
-            );
-          },
-        },
+      toastTx({
+        title: "Agent revoked",
+        txHash: relay.txHash,
       });
     } catch (err) {
       const message =
@@ -250,7 +241,7 @@ export function AgentStatusBar() {
         type="button"
         onClick={handleRevoke}
         disabled={busy}
-        className="bg-surface text-muted ring-soft hover:text-main hover:bg-elevated inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-full px-3 text-[11px] font-semibold tracking-tight transition-colors active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+        className="bg-surface text-danger ring-soft hover:bg-danger-soft inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-full px-3 text-[11px] font-semibold tracking-tight transition-colors active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
       >
         {busy ? (
           <Loader2 className="h-3 w-3 animate-spin" aria-hidden />

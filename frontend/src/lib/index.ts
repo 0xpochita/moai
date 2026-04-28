@@ -29,6 +29,7 @@ export {
   NETWORKS,
 } from "./networks";
 export { formatProtocolName, getProtocolLogoUrl } from "./protocol-logos";
+export { toastTx } from "./toast-tx";
 export { getLocalTokenLogo } from "./token-logos";
 export {
   getAmountsForLiquidity,

@@ -35,7 +35,14 @@ function pickStableSide(): "USDC" {
 
 type RiskProfile = "conservative" | "balanced" | "aggressive";
 
-const SAFE_PROTOCOLS = new Set(["morpho-v1", "aave-v3", "compound-v3", "lido"]);
+// Each profile gets a distinct preferred-protocol set so the picked vault
+// actually changes when the user toggles risk. Without this, vaults
+// dominated by one protocol (e.g. Morpho on Base USDC) win every profile.
+const PROFILE_PROTOCOLS: Record<RiskProfile, string[]> = {
+  conservative: ["aave-v3", "compound-v3", "lido"],
+  balanced: ["morpho-v1", "aave-v3", "compound-v3"],
+  aggressive: ["pendle", "ethena", "yearn-v3", "euler-v2", "etherfi"],
+};
 
 async function pickBestVault(
   asset: string,
@@ -48,24 +55,23 @@ async function pickBestVault(
       chainId: 8453,
       asset,
       sortBy: riskProfile === "conservative" ? "tvl" : "apy",
-      limit: 24,
+      limit: 50,
       trustedOnly: true,
       minTvlUsd: tvlFloor,
     },
     signal,
   ).catch(() => [] as DestinationVault[]);
 
+  if (vaults.length === 0) return null;
+
+  const allowList = PROFILE_PROTOCOLS[riskProfile];
+  const preferred = vaults.filter((v) => allowList.includes(v.protocolName));
+  const pool = preferred.length > 0 ? preferred : vaults;
+
   if (riskProfile === "conservative") {
-    const safe = vaults.filter((v) => SAFE_PROTOCOLS.has(v.protocolName));
-    const sorted = safe.length > 0 ? safe : vaults;
-    return [...sorted].sort((a, b) => b.tvlUsd - a.tvlUsd)[0] ?? null;
+    return [...pool].sort((a, b) => b.tvlUsd - a.tvlUsd)[0] ?? null;
   }
-
-  if (riskProfile === "aggressive") {
-    return [...vaults].sort((a, b) => b.apyTotal - a.apyTotal)[0] ?? null;
-  }
-
-  return vaults[0] ?? null;
+  return [...pool].sort((a, b) => b.apyTotal - a.apyTotal)[0] ?? null;
 }
 
 function isStableSymbol(symbol: string): boolean {

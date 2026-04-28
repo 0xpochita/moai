@@ -1,9 +1,8 @@
 "use client";
 
-import { CheckCircle2, Loader2, ShieldCheck, X } from "lucide-react";
+import { CheckCircle2, Loader2, ShieldCheck, Sparkles, X } from "lucide-react";
 import Image from "next/image";
 import { useEffect, useState } from "react";
-import { toast } from "sonner";
 import { useAccount } from "wagmi";
 import {
   Badge,
@@ -13,18 +12,39 @@ import {
   TokenPairLogos,
 } from "@/components/ui";
 import {
-  explorerTxUrl,
   formatPercent,
   formatProtocolName,
   formatUsd,
   getLocalTokenLogo,
+  toastTx,
 } from "@/lib";
 import {
+  type RiskProfile,
   useHoldingsStore,
   useMigrationStore,
   usePositionsStore,
+  useSettingsStore,
   useUiStore,
 } from "@/store";
+
+const STRATEGY_COPY: Record<RiskProfile, { headline: string; detail: string }> =
+  {
+    conservative: {
+      headline: "Conservative Agent strategy",
+      detail:
+        "Routing to the highest-TVL bluechip (Aave · Compound · Lido). Yield capped for capital safety.",
+    },
+    balanced: {
+      headline: "Balanced Agent strategy",
+      detail:
+        "Picking the best APY among Morpho · Aave · Compound. Default risk-adjusted route.",
+    },
+    aggressive: {
+      headline: "Aggressive Agent strategy",
+      detail:
+        "Maximizing APY across Pendle · Ethena · Yearn · Euler · EtherFi. Higher reward, higher risk.",
+    },
+  };
 import { MigrationLegItem } from "./MigrationLegItem";
 
 export function MigrationModal() {
@@ -57,28 +77,13 @@ export function MigrationModal() {
 
   useEffect(() => {
     if (status === "complete") {
-      toast(
-        plan?.intent === "withdraw"
-          ? "Withdrawal submitted"
-          : "Migration submitted",
-        {
-          description: "Activity log updated. Refreshing positions…",
-          ...(txHash
-            ? {
-                action: {
-                  label: "View on BaseScan",
-                  onClick: () => {
-                    window.open(
-                      explorerTxUrl("base", txHash),
-                      "_blank",
-                      "noopener,noreferrer",
-                    );
-                  },
-                },
-              }
-            : {}),
-        },
-      );
+      toastTx({
+        title:
+          plan?.intent === "withdraw"
+            ? "Withdrawal submitted"
+            : "Migration submitted",
+        txHash: txHash ?? undefined,
+      });
       void retryPositions();
       if (address) void loadHoldings(address);
     }
@@ -89,6 +94,8 @@ export function MigrationModal() {
   const busy = status === "planning" || status === "executing";
   const isWithdraw =
     plan?.intent === "withdraw" || withdrawalTarget !== null;
+  const riskProfile = useSettingsStore((s) => s.riskProfile);
+  const strategy = STRATEGY_COPY[riskProfile];
 
   return (
     <MotionModal open={open} onClose={closing} ariaLabel="Migrate position">
@@ -147,6 +154,21 @@ export function MigrationModal() {
 
         {(ready || status === "executing" || status === "complete") && plan && (
           <>
+            {!isWithdraw && (
+              <section className="bg-brand-soft/40 ring-soft flex items-start gap-3 rounded-xl px-4 py-3 ring-1">
+                <span className="bg-brand text-white inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full">
+                  <Sparkles className="h-3.5 w-3.5" aria-hidden />
+                </span>
+                <div className="min-w-0">
+                  <div className="text-main text-xs font-semibold tracking-tight">
+                    {strategy.headline}
+                  </div>
+                  <div className="text-muted mt-0.5 text-[11px] leading-snug">
+                    {strategy.detail}
+                  </div>
+                </div>
+              </section>
+            )}
             <section className="bg-brand-soft/50 flex items-center justify-between gap-3 rounded-xl px-4 py-3">
               <div className="flex min-w-0 items-center gap-3">
                 {isWithdraw ? (

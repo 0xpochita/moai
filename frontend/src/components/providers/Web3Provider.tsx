@@ -9,16 +9,7 @@ import {
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { type ReactNode, useState } from "react";
 import { WagmiProvider } from "wagmi";
-import {
-  arbitrum,
-  avalanche,
-  base,
-  bsc,
-  mainnet,
-  optimism,
-  polygon,
-  unichain,
-} from "wagmi/chains";
+import { base } from "wagmi/chains";
 
 const PROJECT_ID =
   process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ?? "moai-dev-placeholder";
@@ -29,16 +20,7 @@ const BASE_RPC_URL =
 const wagmiConfig = getDefaultConfig({
   appName: "Moai",
   projectId: PROJECT_ID,
-  chains: [
-    mainnet,
-    arbitrum,
-    base,
-    optimism,
-    polygon,
-    unichain,
-    bsc,
-    avalanche,
-  ],
+  chains: [base],
   // Override Base's default public RPC (rate-limited under cron load).
   transports: {
     [base.id]: http(BASE_RPC_URL),

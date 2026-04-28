@@ -1,10 +1,10 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo } from "react";
+import { useEffect } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { Skeleton } from "@/components/ui";
-import { useDestinationsStore, useSettingsStore } from "@/store";
+import { useDestinationsStore } from "@/store";
 import { DestinationCard } from "./DestinationCard";
 
 const TOP_N = 6;
@@ -14,22 +14,6 @@ export function DestinationsPanel() {
   const status = useDestinationsStore((s) => s.status);
   const error = useDestinationsStore((s) => s.error);
   const load = useDestinationsStore((s) => s.load);
-  const minApyPct = useSettingsStore((s) => s.minApyPct);
-  const allowedProtocols = useSettingsStore(
-    useShallow((s) => s.allowedProtocols),
-  );
-
-  const filtered = useMemo(
-    () =>
-      vaults.filter(
-        (v) =>
-          v.apyTotal >= minApyPct &&
-          allowedProtocols.includes(
-            v.protocolName as (typeof allowedProtocols)[number],
-          ),
-      ),
-    [vaults, minApyPct, allowedProtocols],
-  );
 
   useEffect(() => {
     if (status === "idle") void load("USDC");
@@ -84,17 +68,15 @@ export function DestinationsPanel() {
         </div>
       )}
 
-      {status === "success" && filtered.length === 0 && (
+      {status === "success" && vaults.length === 0 && (
         <div className="bg-elevated text-muted rounded-xl p-4 text-center text-xs">
-          {vaults.length === 0
-            ? "No vaults match the trust filter right now."
-            : `No vaults match your filters (≥${minApyPct.toFixed(1)}% APY, ${allowedProtocols.length} protocols).`}
+          No vaults match the trust filter right now.
         </div>
       )}
 
-      {status === "success" && filtered.length > 0 && (
+      {status === "success" && vaults.length > 0 && (
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.slice(0, TOP_N).map((vault) => (
+          {vaults.slice(0, TOP_N).map((vault) => (
             <DestinationCard key={vault.id} vault={vault} />
           ))}
         </div>

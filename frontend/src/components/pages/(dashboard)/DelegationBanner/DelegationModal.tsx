@@ -16,7 +16,7 @@ import { useAccount, usePublicClient } from "wagmi";
 import { useShallow } from "zustand/react/shallow";
 import { RiskProfilePicker } from "@/components/pages/(dashboard)/SettingsPanel";
 import { MotionModal } from "@/components/ui";
-import { explorerTxUrl, getCaliburHookAddress, shortAddress } from "@/lib";
+import { getCaliburHookAddress, shortAddress, toastTx } from "@/lib";
 import { CALIBUR_DOMAIN_SALT, CALIBUR_SINGLETON } from "@/lib/calibur";
 import { buildRegistration, relayAgent } from "@/services";
 import {
@@ -176,18 +176,9 @@ export function DelegationModal({ open, onClose }: DelegationModalProps) {
         signature,
       });
 
-      toast("Agent registration submitted", {
-        description: `Tx ${shortAddress(relay.txHash)} on Base.`,
-        action: {
-          label: "View on BaseScan",
-          onClick: () => {
-            window.open(
-              explorerTxUrl("base", relay.txHash),
-              "_blank",
-              "noopener,noreferrer",
-            );
-          },
-        },
+      toastTx({
+        title: "Agent registration submitted",
+        txHash: relay.txHash,
       });
 
       try {

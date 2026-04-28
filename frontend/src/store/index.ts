@@ -10,8 +10,6 @@ export { useKeeperStore } from "./useKeeperStore";
 export { useMigrationStore } from "./useMigrationStore";
 export { selectTotals, usePositionsStore } from "./usePositionsStore";
 export {
-  ALL_TRUSTED_PROTOCOLS,
-  type ProtocolKey,
   RISK_PROFILES,
   type RiskProfile,
   useSettingsStore,
