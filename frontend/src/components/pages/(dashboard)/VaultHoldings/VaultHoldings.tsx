@@ -1,11 +1,17 @@
 "use client";
 
 import { ArrowDownToLine, Loader2, Wallet } from "lucide-react";
-import { useEffect } from "react";
+import Image from "next/image";
+import { useEffect, useState } from "react";
 import { useAccount, useWalletClient } from "wagmi";
 import { useShallow } from "zustand/react/shallow";
-import { Skeleton } from "@/components/ui";
-import { formatPercent, formatProtocolName, formatUsd } from "@/lib";
+import { ProtocolAvatar, Skeleton } from "@/components/ui";
+import {
+  formatPercent,
+  formatProtocolName,
+  formatUsd,
+  getLocalTokenLogo,
+} from "@/lib";
 import { useHoldingsStore, useMigrationStore } from "@/store";
 import type { PortfolioPosition } from "@/types";
 
@@ -117,22 +123,41 @@ function HoldingCard({ position }: { position: PortfolioPosition }) {
 
   const pnl = position.pnlUsd;
   const pnlPositive = pnl >= 0;
+  const hasApy = position.apyTotal > 0;
 
   return (
     <div className="bg-elevated flex flex-col gap-2 rounded-xl p-3">
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="text-main truncate text-sm font-semibold tracking-tight">
-            {position.vaultName}
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="relative shrink-0">
+            <TokenLogo
+              address={position.underlyingTokenAddress}
+              symbol={position.underlyingTokenSymbol}
+              chainId={position.chainId}
+              size={32}
+            />
+            <span className="bg-surface ring-soft absolute -right-1 -bottom-1 inline-flex h-4 w-4 items-center justify-center overflow-hidden rounded-full">
+              <ProtocolAvatar
+                protocolName={position.protocolName}
+                size={16}
+              />
+            </span>
           </div>
-          <div className="text-muted-soft truncate text-[11px]">
-            {formatProtocolName(position.protocolName)} ·{" "}
-            {position.underlyingTokenSymbol}
+          <div className="min-w-0">
+            <div className="text-main truncate text-sm font-semibold tracking-tight">
+              {position.vaultName}
+            </div>
+            <div className="text-muted-soft truncate text-[11px]">
+              {formatProtocolName(position.protocolName)} ·{" "}
+              {position.underlyingTokenSymbol}
+            </div>
           </div>
         </div>
-        <div className="text-right">
-          <div className="text-success text-xs font-semibold tracking-tight">
-            {formatPercent(position.apyTotal, 2)}
+        <div className="text-right shrink-0">
+          <div
+            className={`text-xs font-semibold tracking-tight ${hasApy ? "text-success" : "text-muted"}`}
+          >
+            {hasApy ? formatPercent(position.apyTotal, 2) : "—"}
           </div>
           <div className="text-muted-soft text-[10px]">APY</div>
         </div>
@@ -169,5 +194,47 @@ function HoldingCard({ position }: { position: PortfolioPosition }) {
         </button>
       </div>
     </div>
+  );
+}
+
+function TokenLogo({
+  address,
+  symbol,
+  chainId,
+  size,
+}: {
+  address: string;
+  symbol: string;
+  chainId: number;
+  size: number;
+}) {
+  const [errored, setErrored] = useState(false);
+  const local = getLocalTokenLogo(address);
+  const slug = chainId === 8453 ? "base" : "ethereum";
+  const remote = `https://dd.dexscreener.com/ds-data/tokens/${slug}/${address.toLowerCase()}.png`;
+  const src = local ?? remote;
+
+  if (errored) {
+    return (
+      <span
+        style={{ height: size, width: size }}
+        className="bg-brand-soft text-brand inline-flex shrink-0 items-center justify-center rounded-full text-[10px] font-bold tracking-tight uppercase"
+      >
+        {symbol.charAt(0)}
+      </span>
+    );
+  }
+
+  return (
+    <Image
+      src={src}
+      alt={symbol}
+      width={size}
+      height={size}
+      style={{ height: size, width: size }}
+      className="bg-surface ring-soft shrink-0 rounded-full object-cover"
+      onError={() => setErrored(true)}
+      unoptimized
+    />
   );
 }

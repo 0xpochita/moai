@@ -55,12 +55,18 @@ interface RawVaultsResponse {
   total?: number;
 }
 
+/// Actual shape of `/v1/portfolio/:owner/positions`. Each entry is the
+/// minimal vault holding info — no vault metadata (name, APY) is included,
+/// so we enrich it ourselves by matching the vault address against the
+/// vaults list.
 interface RawPortfolioPosition {
-  vault: RawVault;
-  shares: string;
-  underlyingBalance: string;
-  underlyingBalanceUsd: string;
-  pnlUsd?: string;
+  chainId: number;
+  /// Vault contract address (the "lp token" the user holds).
+  address: string;
+  protocolName: string;
+  asset: { address: string; name: string; symbol: string; decimals: number };
+  balanceUsd: string | null;
+  balanceNative: string;
 }
 
 interface RawPortfolioResponse {
@@ -94,23 +100,27 @@ function toDestination(raw: RawVault): DestinationVault {
   };
 }
 
-function toPortfolio(raw: RawPortfolioPosition): PortfolioPosition {
-  const underlying = raw.vault.underlyingTokens[0];
+function toPortfolio(
+  raw: RawPortfolioPosition,
+  enrichment?: RawVault,
+): PortfolioPosition {
+  const balanceUsd = Number(raw.balanceUsd ?? "0") || 0;
+  const fallbackName = `${raw.asset.symbol} on ${raw.protocolName}`;
   return {
-    vaultId: raw.vault.slug,
-    vaultAddress: raw.vault.address,
-    chainId: raw.vault.chainId,
-    vaultName: raw.vault.name,
-    protocolName: raw.vault.protocol.name,
-    protocolUrl: raw.vault.protocol.url,
-    underlyingTokenAddress: underlying?.address ?? "",
-    underlyingTokenSymbol: underlying?.symbol ?? "?",
-    underlyingTokenDecimals: underlying?.decimals ?? 18,
-    shares: raw.shares,
-    underlyingBalance: raw.underlyingBalance,
-    underlyingBalanceUsd: Number(raw.underlyingBalanceUsd) || 0,
-    apyTotal: raw.vault.analytics.apy.total ?? 0,
-    pnlUsd: raw.pnlUsd ? Number(raw.pnlUsd) : 0,
+    vaultId: enrichment?.slug ?? raw.address.toLowerCase(),
+    vaultAddress: raw.address,
+    chainId: raw.chainId,
+    vaultName: enrichment?.name ?? fallbackName,
+    protocolName: raw.protocolName,
+    protocolUrl: enrichment?.protocol.url ?? "",
+    underlyingTokenAddress: raw.asset.address,
+    underlyingTokenSymbol: raw.asset.symbol,
+    underlyingTokenDecimals: raw.asset.decimals,
+    shares: raw.balanceNative,
+    underlyingBalance: raw.balanceNative,
+    underlyingBalanceUsd: balanceUsd,
+    apyTotal: enrichment?.analytics.apy.total ?? 0,
+    pnlUsd: 0,
   };
 }
 
@@ -169,6 +179,53 @@ export async function fetchVaults(
   return result.sort((a, b) => b.apyTotal - a.apyTotal);
 }
 
+/// Fetch the raw vault rows for a list of (chainId, asset) pairs and
+/// build an `address.toLowerCase() → RawVault` lookup. Used to enrich
+/// portfolio positions with name + APY (the portfolio endpoint omits
+/// those).
+async function fetchVaultMetaByAddress(
+  needs: Array<{ chainId: number; asset: string }>,
+  signal?: AbortSignal,
+): Promise<Map<string, RawVault>> {
+  const seen = new Set<string>();
+  const dedup = needs.filter((n) => {
+    const key = `${n.chainId}:${n.asset.toUpperCase()}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  const map = new Map<string, RawVault>();
+  await Promise.all(
+    dedup.map(async ({ chainId, asset }) => {
+      const params = new URLSearchParams({
+        chainId: String(chainId),
+        asset,
+        sortBy: "tvl",
+        limit: "100",
+      });
+      try {
+        const res = await fetch(`${EARN_BASE}/v1/vaults?${params.toString()}`, {
+          signal,
+          headers: {
+            "x-lifi-api-key": getApiKey(),
+            accept: "application/json",
+          },
+          next: { revalidate: 60 },
+        });
+        if (!res.ok) return;
+        const json = (await res.json()) as RawVaultsResponse;
+        for (const v of json.data ?? []) {
+          map.set(v.address.toLowerCase(), v);
+        }
+      } catch {
+        // best-effort enrichment
+      }
+    }),
+  );
+  return map;
+}
+
 export async function fetchPortfolio(
   walletAddress: string,
   signal?: AbortSignal,
@@ -190,7 +247,19 @@ export async function fetchPortfolio(
   }
 
   const json = (await res.json()) as RawPortfolioResponse;
-  return (json.positions ?? []).map(toPortfolio);
+  const positions = json.positions ?? [];
+  if (positions.length === 0) return [];
+
+  // Enrich with full vault metadata (name + APY) by querying /v1/vaults
+  // for each (chainId, asset) we hold, then matching by address.
+  const meta = await fetchVaultMetaByAddress(
+    positions.map((p) => ({ chainId: p.chainId, asset: p.asset.symbol })),
+    signal,
+  );
+
+  return positions.map((p) =>
+    toPortfolio(p, meta.get(p.address.toLowerCase())),
+  );
 }
 
 export { logoUrlForToken };
