@@ -8,6 +8,8 @@ export interface MigrationLeg {
   target: string;
   targetAddress: string;
   description: string;
+  calldata?: string;
+  value?: string;
 }
 
 export interface MigrationYield {

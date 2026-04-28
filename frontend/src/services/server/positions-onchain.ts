@@ -449,7 +449,7 @@ interface RawV4Position {
 
 async function fetchV4OwnedTokenIds(
   owner: Address,
-  signal?: AbortSignal,
+  _signal?: AbortSignal,
 ): Promise<bigint[]> {
   const balance = await baseClient
     .readContract({

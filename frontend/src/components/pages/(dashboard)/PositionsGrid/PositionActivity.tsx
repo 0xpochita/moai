@@ -30,9 +30,16 @@ type PositionActivityProps = {
 
 export function PositionActivity({ position }: PositionActivityProps) {
   const filtered = useAgentActionsStore(
-    useShallow((s) =>
-      s.actions.filter((a) => a.positionTokenId === position.tokenId),
-    ),
+    useShallow((s) => {
+      const tokenId = position.tokenId;
+      const local = s.actions.filter((a) => a.positionTokenId === tokenId);
+      const remote = s.remoteActions.filter(
+        (a) => a.positionTokenId === tokenId,
+      );
+      return [...remote, ...local].sort(
+        (a, b) => b.createdAtSec - a.createdAtSec,
+      );
+    }),
   );
 
   return (

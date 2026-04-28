@@ -3,12 +3,16 @@
 import { CheckCircle2, Loader2, ShieldCheck, X } from "lucide-react";
 import { useEffect } from "react";
 import { toast } from "sonner";
+import { useWalletClient } from "wagmi";
 import { Badge, Skeleton } from "@/components/ui";
 import { formatPercent, formatProtocolName, formatUsd } from "@/lib";
 import { useMigrationStore, usePositionsStore } from "@/store";
 import { MigrationLegItem } from "./MigrationLegItem";
 
+const BASE_CHAIN_ID = 8453;
+
 export function MigrationModal() {
+  const { data: walletClient } = useWalletClient({ chainId: BASE_CHAIN_ID });
   const open = useMigrationStore((s) => s.open);
   const status = useMigrationStore((s) => s.status);
   const plan = useMigrationStore((s) => s.plan);
@@ -17,6 +21,10 @@ export function MigrationModal() {
   const execute = useMigrationStore((s) => s.execute);
   const dismiss = useMigrationStore((s) => s.dismiss);
   const retryPositions = usePositionsStore((s) => s.retry);
+
+  const handleExecute = () => {
+    void execute({ walletClient: walletClient ?? null });
+  };
 
   useEffect(() => {
     if (status === "complete") {
@@ -166,7 +174,7 @@ export function MigrationModal() {
         {status !== "complete" && (
           <button
             type="button"
-            onClick={execute}
+            onClick={handleExecute}
             disabled={!ready || busy}
             className="bg-brand hover:bg-brand-hover inline-flex h-11 items-center justify-center gap-2 rounded-full text-sm font-semibold tracking-tight text-white transition-colors active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
           >

@@ -3,12 +3,14 @@ import type { AgentAction, AgentActionType } from "@/types";
 
 interface AgentActionsState {
   actions: AgentAction[];
+  remoteActions: AgentAction[];
   recordMigration: (
     positionTokenId: string,
     destination: string,
     txHash?: string,
   ) => void;
   recordDelegation: (delegateAddress: string) => void;
+  setRemoteActions: (actions: AgentAction[]) => void;
   reset: () => void;
 }
 
@@ -69,6 +71,7 @@ function seedActions(): AgentAction[] {
 
 export const useAgentActionsStore = create<AgentActionsState>((set) => ({
   actions: seedActions(),
+  remoteActions: [],
   recordMigration: (positionTokenId, destination, txHash) =>
     set((state) => {
       const action: AgentAction = {
@@ -94,5 +97,6 @@ export const useAgentActionsStore = create<AgentActionsState>((set) => ({
       };
       return { actions: [action, ...state.actions].slice(0, 50) };
     }),
-  reset: () => set({ actions: seedActions() }),
+  setRemoteActions: (remoteActions) => set({ remoteActions }),
+  reset: () => set({ actions: seedActions(), remoteActions: [] }),
 }));

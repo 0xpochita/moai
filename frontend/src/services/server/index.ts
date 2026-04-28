@@ -1,4 +1,21 @@
 export {
+  APPROVE_MAX,
+  type BurnV4Args,
+  encodeApproveCalldata,
+  encodeV4BurnCalldata,
+} from "./calldata-encoders";
+export { runKeeperTick } from "./keeper";
+export {
+  getSubscription,
+  getTickStats,
+  isSubscribed,
+  listActivities,
+  listSubscriptions,
+  type SubscriptionRecord,
+  subscribe,
+  unsubscribe,
+} from "./keeper-store";
+export {
   type ComposerQuoteRequest,
   type ComposerQuoteResponse,
   type ComposerTransactionRequest,
