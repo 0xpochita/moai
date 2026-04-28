@@ -3,6 +3,10 @@ cache/
 broadcast/
 lib/
 .env
+.env.local
+.env.*.local
+.env.production
+.env.development
 *.swp
 .vscode/
 .idea/
