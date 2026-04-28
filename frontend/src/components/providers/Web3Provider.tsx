@@ -1,5 +1,5 @@
 "use client";
-
+import { http } from "viem";
 import "@rainbow-me/rainbowkit/styles.css";
 import {
   getDefaultConfig,
@@ -23,6 +23,9 @@ import {
 const PROJECT_ID =
   process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ?? "moai-dev-placeholder";
 
+const BASE_RPC_URL =
+  process.env.NEXT_PUBLIC_BASE_RPC_URL ?? "https://base.drpc.org";
+
 const wagmiConfig = getDefaultConfig({
   appName: "Moai",
   projectId: PROJECT_ID,
@@ -36,6 +39,10 @@ const wagmiConfig = getDefaultConfig({
     bsc,
     avalanche,
   ],
+  // Override Base's default public RPC (rate-limited under cron load).
+  transports: {
+    [base.id]: http(BASE_RPC_URL),
+  },
   ssr: true,
 });
 

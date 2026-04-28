@@ -11,11 +11,17 @@ import {
   Skeleton,
   TokenPairLogos,
 } from "@/components/ui";
-import { formatPercent, formatProtocolName, formatUsd } from "@/lib";
+import {
+  explorerTxUrl,
+  formatPercent,
+  formatProtocolName,
+  formatUsd,
+} from "@/lib";
 import {
   useHoldingsStore,
   useMigrationStore,
   usePositionsStore,
+  useUiStore,
 } from "@/store";
 import { MigrationLegItem } from "./MigrationLegItem";
 
@@ -24,6 +30,7 @@ export function MigrationModal() {
   const status = useMigrationStore((s) => s.status);
   const plan = useMigrationStore((s) => s.plan);
   const error = useMigrationStore((s) => s.error);
+  const txHash = useMigrationStore((s) => s.txHash);
   const cancel = useMigrationStore((s) => s.cancel);
   const execute = useMigrationStore((s) => s.execute);
   const dismiss = useMigrationStore((s) => s.dismiss);
@@ -35,6 +42,16 @@ export function MigrationModal() {
     void execute({ owner: address ?? null });
   };
 
+  const openDelegationModal = useUiStore((s) => s.openDelegationModal);
+  const needsDelegation =
+    status === "error" &&
+    typeof error === "string" &&
+    /agent\s+not\s+registered|delegate\s+first/i.test(error);
+  const handleDelegate = () => {
+    cancel();
+    openDelegationModal();
+  };
+
   useEffect(() => {
     if (status === "complete") {
       toast(
@@ -43,12 +60,26 @@ export function MigrationModal() {
           : "Migration submitted",
         {
           description: "Activity log updated. Refreshing positions…",
+          ...(txHash
+            ? {
+                action: {
+                  label: "View on BaseScan",
+                  onClick: () => {
+                    window.open(
+                      explorerTxUrl("base", txHash),
+                      "_blank",
+                      "noopener,noreferrer",
+                    );
+                  },
+                },
+              }
+            : {}),
         },
       );
       void retryPositions();
       if (address) void loadHoldings(address);
     }
-  }, [status, plan?.intent, retryPositions, loadHoldings, address]);
+  }, [status, plan?.intent, txHash, retryPositions, loadHoldings, address]);
 
   const closing = status === "complete" ? dismiss : cancel;
   const ready = status === "ready" && plan !== null;
@@ -93,8 +124,20 @@ export function MigrationModal() {
         )}
 
         {status === "error" && (
-          <div className="bg-elevated text-muted rounded-xl p-4 text-center text-xs">
-            {error ?? "Failed to plan migration."}
+          <div className="bg-elevated rounded-xl p-4 text-center">
+            <p className="text-muted text-xs">
+              {error ?? "Failed to plan migration."}
+            </p>
+            {needsDelegation && (
+              <p className="text-muted-soft mt-2 text-[11px] leading-snug">
+                Click{" "}
+                <span className="text-brand font-semibold">
+                  Delegate to MOAI
+                </span>{" "}
+                below to register the agent on your wallet (one signature, no
+                gas), then come back to migrate.
+              </p>
+            )}
           </div>
         )}
 
@@ -218,26 +261,36 @@ export function MigrationModal() {
           </>
         )}
 
-        {status !== "complete" && (
-          <button
-            type="button"
-            onClick={handleExecute}
-            disabled={!ready || busy}
-            className="bg-brand hover:bg-brand-hover inline-flex h-11 items-center justify-center gap-2 rounded-full text-sm font-semibold tracking-tight text-white transition-colors active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {status === "executing" ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                {isWithdraw ? "Withdrawing…" : "Migrating…"}
-              </>
-            ) : (
-              <>
-                <ShieldCheck className="h-4 w-4" aria-hidden />
-                {isWithdraw ? "Confirm withdrawal" : "Confirm migration"}
-              </>
-            )}
-          </button>
-        )}
+        {status !== "complete" &&
+          (needsDelegation ? (
+            <button
+              type="button"
+              onClick={handleDelegate}
+              className="bg-brand hover:bg-brand-hover inline-flex h-11 items-center justify-center gap-2 rounded-full text-sm font-semibold tracking-tight text-white transition-colors active:scale-[0.98]"
+            >
+              <ShieldCheck className="h-4 w-4" aria-hidden />
+              Delegate to MOAI
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleExecute}
+              disabled={!ready || busy}
+              className="bg-brand hover:bg-brand-hover inline-flex h-11 items-center justify-center gap-2 rounded-full text-sm font-semibold tracking-tight text-white transition-colors active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {status === "executing" ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                  {isWithdraw ? "Withdrawing…" : "Migrating…"}
+                </>
+              ) : (
+                <>
+                  <ShieldCheck className="h-4 w-4" aria-hidden />
+                  {isWithdraw ? "Confirm withdrawal" : "Confirm migration"}
+                </>
+              )}
+            </button>
+          ))}
 
         {status === "complete" && (
           <div className="bg-success-soft text-success flex items-center justify-center gap-2 rounded-full py-3 text-sm font-semibold tracking-tight">

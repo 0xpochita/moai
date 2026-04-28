@@ -4,11 +4,13 @@ import { Loader2, Power, Radio, ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import type { Hex } from "viem";
-import { useAccount, usePublicClient, useWalletClient } from "wagmi";
-import { formatRelativeTime } from "@/lib";
+import { useAccount, usePublicClient } from "wagmi";
+import { explorerTxUrl, formatRelativeTime } from "@/lib";
+import { CALIBUR_DOMAIN_SALT } from "@/lib/calibur";
 import { buildRevocation, relayAgent } from "@/services";
 import {
   RISK_PROFILES,
+  useAgentStatusStore,
   useDelegationStore,
   useKeeperStore,
   useSettingsStore,
@@ -17,13 +19,45 @@ import {
 const BASE_CHAIN_ID = 8453;
 const POLL_INTERVAL_MS = 15_000;
 
+const EIP712_TYPES = {
+  EIP712Domain: [
+    { name: "name", type: "string" },
+    { name: "version", type: "string" },
+    { name: "chainId", type: "uint256" },
+    { name: "verifyingContract", type: "address" },
+    { name: "salt", type: "bytes32" },
+  ],
+  SignedBatchedCall: [
+    { name: "batchedCall", type: "BatchedCall" },
+    { name: "nonce", type: "uint256" },
+    { name: "keyHash", type: "bytes32" },
+    { name: "executor", type: "address" },
+    { name: "deadline", type: "uint256" },
+  ],
+  BatchedCall: [
+    { name: "calls", type: "Call[]" },
+    { name: "revertOnFailure", type: "bool" },
+  ],
+  Call: [
+    { name: "to", type: "address" },
+    { name: "value", type: "uint256" },
+    { name: "data", type: "bytes" },
+  ],
+} as const;
+
+interface EthereumProvider {
+  request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
+}
+
 export function AgentStatusBar() {
   const { address, isConnected } = useAccount();
-  const { data: walletClient } = useWalletClient({ chainId: BASE_CHAIN_ID });
   const publicClient = usePublicClient({ chainId: BASE_CHAIN_ID });
 
-  const delegationStatus = useDelegationStore((s) => s.status);
   const markNotDelegated = useDelegationStore((s) => s.markNotDelegated);
+
+  const agentStatus = useAgentStatusStore((s) => s.status);
+  const refreshAgentStatus = useAgentStatusStore((s) => s.refresh);
+  const clearAgentStatus = useAgentStatusStore((s) => s.clear);
 
   const keeperStatus = useKeeperStore((s) => s.status);
   const subscription = useKeeperStore((s) => s.subscription);
@@ -40,8 +74,23 @@ export function AgentStatusBar() {
 
   const [busy, setBusy] = useState(false);
 
+  // Truth: agent is "active" only when on-chain status confirms BOTH
+  // Calibur delegation + agent key registered.
+  const isAgentLive = Boolean(
+    agentStatus?.caliburDelegated && agentStatus?.agentRegistered,
+  );
+
+  // Refresh agent status whenever the connected address changes.
   useEffect(() => {
-    if (delegationStatus !== "delegated" || !address) {
+    if (!isConnected || !address) {
+      clearAgentStatus();
+      return;
+    }
+    void refreshAgentStatus(address);
+  }, [isConnected, address, refreshAgentStatus, clearAgentStatus]);
+
+  useEffect(() => {
+    if (!isAgentLive || !address) {
       stopPolling();
       return;
     }
@@ -51,73 +100,97 @@ export function AgentStatusBar() {
     return () => {
       stopPolling();
     };
-  }, [delegationStatus, address, ownerAddress, startPolling, stopPolling]);
+  }, [isAgentLive, address, ownerAddress, startPolling, stopPolling]);
 
   useEffect(() => {
-    if (
-      delegationStatus === "delegated" &&
-      address &&
-      keeperStatus === "success" &&
-      !subscription
-    ) {
+    if (isAgentLive && address && keeperStatus === "success" && !subscription) {
       void enable(address).catch(() => {
-        // ignore: keeper offline; user can retry by toggling
+        // ignore: keeper offline
       });
     }
-  }, [delegationStatus, address, keeperStatus, subscription, enable]);
+  }, [isAgentLive, address, keeperStatus, subscription, enable]);
 
   if (!isConnected || !address) return null;
-  if (delegationStatus !== "delegated") return null;
+  if (!isAgentLive) return null;
 
   const lastTickAtSec = meta?.tickStats.lastTickAtSec ?? 0;
   const lastCheckedAtSec = subscription?.lastCheckedAtSec ?? 0;
   const isSubscribed = Boolean(subscription);
 
   const handleRevoke = async () => {
-    if (!walletClient || !publicClient || !address) return;
+    if (!publicClient || !address) return;
     setBusy(true);
     try {
+      // Stop polling first.
       if (isSubscribed) {
         await disable(address).catch(() => {
           // tolerate keeper offline
         });
       }
-      // User signs an EIP-712 batch that revokes the agent key on Calibur.
-      // Relayer pays gas to submit it.
+
+      // If the agent isn't actually registered on-chain, just clear local
+      // state — there's nothing to revoke.
+      if (!agentStatus?.agentRegistered) {
+        markNotDelegated();
+        clearAgentStatus();
+        toast("Local state cleared", {
+          description: "Agent wasn't registered on-chain; nothing to submit.",
+        });
+        return;
+      }
+
       const envelope = await buildRevocation(address);
-      const message = {
-        batchedCall: {
-          calls: envelope.signedBatchedCall.batchedCall.calls.map((c) => ({
-            to: c.to as `0x${string}`,
-            value: BigInt(c.value),
-            data: c.data as Hex,
-          })),
-          revertOnFailure:
-            envelope.signedBatchedCall.batchedCall.revertOnFailure,
+
+      const provider = (window as { ethereum?: EthereumProvider }).ethereum;
+      if (!provider) throw new Error("No wallet provider available");
+
+      const typedData = {
+        types: EIP712_TYPES,
+        primaryType: "SignedBatchedCall",
+        domain: {
+          name: "Calibur",
+          version: "1.0.0",
+          chainId: BASE_CHAIN_ID,
+          verifyingContract: address,
+          salt: CALIBUR_DOMAIN_SALT,
         },
-        nonce: BigInt(envelope.signedBatchedCall.nonce),
-        keyHash: envelope.signedBatchedCall.keyHash as Hex,
-        executor: envelope.signedBatchedCall.executor as `0x${string}`,
-        deadline: BigInt(envelope.signedBatchedCall.deadline),
+        message: envelope.signedBatchedCall,
       };
-      // biome-ignore lint/suspicious/noExplicitAny: viem typed-data generics
-      const sig = (await walletClient.signTypedData({
-        account: walletClient.account!,
-        domain: envelope.typedData.domain,
-        types: envelope.typedData.types,
-        primaryType: envelope.typedData.primaryType,
-        message,
-      } as any)) as Hex;
+
+      const signature = (await provider.request({
+        method: "eth_signTypedData_v4",
+        params: [address, JSON.stringify(typedData)],
+      })) as Hex;
 
       const relay = await relayAgent({
         owner: address,
         signedBatchedCall: envelope.signedBatchedCall,
-        signature: sig,
+        signature,
       });
 
+      try {
+        await publicClient.waitForTransactionReceipt({
+          hash: relay.txHash,
+          timeout: 60_000,
+        });
+      } catch {
+        // best-effort wait
+      }
+
       markNotDelegated();
+      await refreshAgentStatus(address);
       toast("Agent revoked", {
-        description: `Tx ${relay.txHash.slice(0, 10)}… submitted on Base.`,
+        description: `Tx ${relay.txHash.slice(0, 10)}… on Base.`,
+        action: {
+          label: "View on BaseScan",
+          onClick: () => {
+            window.open(
+              explorerTxUrl("base", relay.txHash),
+              "_blank",
+              "noopener,noreferrer",
+            );
+          },
+        },
       });
     } catch (err) {
       const message =
@@ -176,7 +249,7 @@ export function AgentStatusBar() {
       <button
         type="button"
         onClick={handleRevoke}
-        disabled={busy || !walletClient}
+        disabled={busy}
         className="bg-surface text-muted ring-soft hover:text-main hover:bg-elevated inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-full px-3 text-[11px] font-semibold tracking-tight transition-colors active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
       >
         {busy ? (

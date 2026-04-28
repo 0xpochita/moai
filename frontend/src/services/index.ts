@@ -1,7 +1,11 @@
 export {
+  type AgentInfo,
+  type AgentStatus,
   type BuildEnvelopeResult,
   buildRegistration,
   buildRevocation,
+  fetchAgentInfo,
+  fetchAgentStatus,
   type JsonSignedBatchedCall,
   type MigrateNowResult,
   migrateNow,

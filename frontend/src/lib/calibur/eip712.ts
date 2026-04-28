@@ -23,8 +23,18 @@ export interface CaliburSignedBatchedCall {
   deadline: bigint;
 }
 
+/// Calibur singleton implementation address — packed into the EIP-712 salt.
+const CALIBUR_IMPL: Address = "0x000000009B1D0aF20D8C6d0A44e162d11F9b8f00";
+
+/// Domain salt = (prefix << 160) | implementation. Default prefix is 0.
+/// Matches PrefixedSaltLib.pack on-chain.
+export const CALIBUR_DOMAIN_SALT: `0x${string}` = ("0x" +
+  CALIBUR_IMPL.slice(2).toLowerCase().padStart(64, "0")) as `0x${string}`;
+
 /// Calibur's EIP-712 domain. `verifyingContract` is the user's EOA because
 /// Calibur runs as the EOA's bytecode (post-7702). Different per user.
+/// `salt` includes the implementation address so two Calibur deployments
+/// can't accept each other's signatures.
 export function caliburDomain(
   userEoa: Address,
   chainId: number = BASE_CHAIN_ID,
@@ -34,6 +44,7 @@ export function caliburDomain(
     version: "1.0.0",
     chainId,
     verifyingContract: userEoa,
+    salt: CALIBUR_DOMAIN_SALT,
   };
 }
 

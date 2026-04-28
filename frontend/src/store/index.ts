@@ -1,4 +1,5 @@
 export { useAgentActionsStore } from "./useAgentActionsStore";
+export { useAgentStatusStore } from "./useAgentStatusStore";
 export {
   type DelegationStoreStatus,
   useDelegationStore,
@@ -15,3 +16,4 @@ export {
   type RiskProfile,
   useSettingsStore,
 } from "./useSettingsStore";
+export { useUiStore } from "./useUiStore";

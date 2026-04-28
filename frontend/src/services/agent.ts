@@ -41,6 +41,40 @@ async function postJson<T>(url: string, body: unknown): Promise<T> {
   return json;
 }
 
+async function getJson<T>(url: string): Promise<T> {
+  const res = await fetch(url, {
+    headers: { accept: "application/json" },
+  });
+  const json = (await res.json()) as T & { error?: string };
+  if (!res.ok) {
+    throw new Error(json.error ?? `${url} failed (${res.status})`);
+  }
+  return json;
+}
+
+export interface AgentInfo {
+  agentAddress: string;
+  agentKeyHash: string;
+  hookAddress: string;
+}
+
+export function fetchAgentInfo(): Promise<AgentInfo> {
+  return getJson<AgentInfo>("/api/agent/info");
+}
+
+export interface AgentStatus {
+  caliburDelegated: boolean;
+  agentRegistered: boolean;
+  agentAddress: string;
+  agentKeyHash: string;
+}
+
+export function fetchAgentStatus(owner: string): Promise<AgentStatus> {
+  return getJson<AgentStatus>(
+    `/api/agent/status?owner=${encodeURIComponent(owner)}`,
+  );
+}
+
 export function buildRegistration(owner: string): Promise<BuildEnvelopeResult> {
   return postJson<BuildEnvelopeResult>("/api/agent/build-registration", {
     owner,

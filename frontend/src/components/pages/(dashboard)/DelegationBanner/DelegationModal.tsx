@@ -12,90 +12,105 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import type { Hex } from "viem";
-import { useAccount, useWalletClient } from "wagmi";
+import { useAccount, usePublicClient } from "wagmi";
 import { useShallow } from "zustand/react/shallow";
 import { RiskProfilePicker } from "@/components/pages/(dashboard)/SettingsPanel";
 import { MotionModal } from "@/components/ui";
-import { getCaliburHookAddress, shortAddress } from "@/lib";
+import { explorerTxUrl, getCaliburHookAddress, shortAddress } from "@/lib";
+import { CALIBUR_DOMAIN_SALT, CALIBUR_SINGLETON } from "@/lib/calibur";
+import { buildRegistration, relayAgent } from "@/services";
 import {
-  CALIBUR_SINGLETON,
-  type CaliburCall,
-  type CaliburSignedBatchedCall,
-  signedBatchedCallTypedData,
-} from "@/lib/calibur";
-import { submitSelfDelegationTx } from "@/lib/eip7702";
-import {
-  buildRegistration,
-  type JsonSignedBatchedCall,
-  relayAgent,
-} from "@/services";
-import { useDelegationStore, useKeeperStore, usePositionsStore } from "@/store";
+  useAgentStatusStore,
+  useDelegationStore,
+  useKeeperStore,
+  usePositionsStore,
+} from "@/store";
 
 const BASE_CHAIN_ID = 8453;
 const EXPIRY_DAYS = 30;
 
-type Step = "prepare" | "delegate" | "register" | "active";
+type Step = "prepare" | "sign" | "relaying" | "active";
 
 type DelegationModalProps = {
   open: boolean;
   onClose: () => void;
 };
 
-function reviveCalls(
-  json: JsonSignedBatchedCall["batchedCall"]["calls"],
-): CaliburCall[] {
-  return json.map((c) => ({
-    to: c.to as `0x${string}`,
-    value: BigInt(c.value),
-    data: c.data as Hex,
-  }));
+// EIP-712 type definitions matching Calibur's Call / BatchedCall /
+// SignedBatchedCall type strings verbatim. Including EIP712Domain in the
+// types map is necessary for `eth_signTypedData_v4` so the wallet builds
+// the right domain separator (which uses the salt field).
+const EIP712_TYPES = {
+  EIP712Domain: [
+    { name: "name", type: "string" },
+    { name: "version", type: "string" },
+    { name: "chainId", type: "uint256" },
+    { name: "verifyingContract", type: "address" },
+    { name: "salt", type: "bytes32" },
+  ],
+  SignedBatchedCall: [
+    { name: "batchedCall", type: "BatchedCall" },
+    { name: "nonce", type: "uint256" },
+    { name: "keyHash", type: "bytes32" },
+    { name: "executor", type: "address" },
+    { name: "deadline", type: "uint256" },
+  ],
+  BatchedCall: [
+    { name: "calls", type: "Call[]" },
+    { name: "revertOnFailure", type: "bool" },
+  ],
+  Call: [
+    { name: "to", type: "address" },
+    { name: "value", type: "uint256" },
+    { name: "data", type: "bytes" },
+  ],
+} as const;
+
+interface EthereumProvider {
+  request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
 }
 
-function reviveSignedBatchedCall(
-  json: JsonSignedBatchedCall,
-): CaliburSignedBatchedCall {
-  return {
-    batchedCall: {
-      calls: reviveCalls(json.batchedCall.calls),
-      revertOnFailure: json.batchedCall.revertOnFailure,
-    },
-    nonce: BigInt(json.nonce),
-    keyHash: json.keyHash as Hex,
-    executor: json.executor as `0x${string}`,
-    deadline: BigInt(json.deadline),
-  };
+function isCaliburCode(code: string | undefined): boolean {
+  if (!code || code === "0x" || code.length < 46) return false;
+  const lower = code.toLowerCase();
+  const expected = `0xef0100${CALIBUR_SINGLETON.slice(2).toLowerCase()}`;
+  return lower.startsWith(expected);
 }
 
 export function DelegationModal({ open, onClose }: DelegationModalProps) {
   const { address } = useAccount();
-  const { data: walletClient } = useWalletClient({ chainId: BASE_CHAIN_ID });
-  const status = useDelegationStore((s) => s.status);
-  const delegateAddress = useDelegationStore((s) => s.delegateAddress);
+  const publicClient = usePublicClient({ chainId: BASE_CHAIN_ID });
   const markDelegated = useDelegationStore((s) => s.markDelegated);
   const positions = usePositionsStore(useShallow((s) => s.positions));
   const enableKeeper = useKeeperStore((s) => s.enable);
+  const agentStatus = useAgentStatusStore((s) => s.status);
+  const refreshAgentStatus = useAgentStatusStore((s) => s.refresh);
 
   const hookAddress = getCaliburHookAddress();
   const eligibleCount = positions.filter((p) => p.status !== "closed").length;
 
-  const alreadyDelegatedToCalibur = useMemo(() => {
-    return delegateAddress?.toLowerCase() === CALIBUR_SINGLETON.toLowerCase();
-  }, [delegateAddress]);
-
-  const [step, setStep] = useState<Step>(
-    status === "delegated" ? "active" : "prepare",
+  // Truth: agent already active = on-chain confirms BOTH the EOA is
+  // Calibur-delegated AND the agent key is registered. We never trust
+  // local "I clicked it" state.
+  const isAgentLive = useMemo(
+    () =>
+      Boolean(agentStatus?.caliburDelegated && agentStatus?.agentRegistered),
+    [agentStatus?.caliburDelegated, agentStatus?.agentRegistered],
   );
+
+  const initialStep: Step = isAgentLive ? "active" : "prepare";
+  const [step, setStep] = useState<Step>(initialStep);
   const [busy, setBusy] = useState(false);
 
-  // Reset to "prepare" each time the modal reopens.
   useEffect(() => {
     if (!open) return;
-    setStep(status === "delegated" ? "active" : "prepare");
+    setStep(initialStep);
     setBusy(false);
-  }, [open, status]);
+    if (address) void refreshAgentStatus(address);
+  }, [open, initialStep, address, refreshAgentStatus]);
 
   const handleContinue = async () => {
-    if (!walletClient || !address || !hookAddress) {
+    if (!address || !publicClient || !hookAddress) {
       toast("Hook contract not configured", {
         description: "Set NEXT_PUBLIC_CALIBUR_HOOK_ADDRESS first.",
       });
@@ -105,60 +120,97 @@ export function DelegationModal({ open, onClose }: DelegationModalProps) {
     setBusy(true);
 
     try {
-      // Step A — EIP-7702 self-delegation to the Calibur singleton (if not
-      // already there). Reuse the existing helper (it sends a type-4 tx).
-      if (!alreadyDelegatedToCalibur) {
-        setStep("delegate");
-        const txHash = await submitSelfDelegationTx({
-          walletClient,
-          delegate: CALIBUR_SINGLETON,
-          chainId: BASE_CHAIN_ID,
+      // Pre-flight: the EOA must already be delegated to Calibur. Smart
+      // Wallets (Uniswap, Coinbase) inject this delegation lazily on
+      // their first transaction.
+      const code = await publicClient.getCode({ address });
+      if (!isCaliburCode(code)) {
+        toast("Wallet not yet delegated to Calibur", {
+          description:
+            "Open Uniswap Wallet → enable Smart Wallet (Settings → Advanced) → do any tx (e.g. tiny swap). Or use Coinbase Smart Wallet.",
         });
-        toast("EIP-7702 delegation submitted", {
-          description: `Tx ${shortAddress(txHash)} on Base.`,
-        });
-        // Wait briefly for the block; the next call needs the EOA's bytecode
-        // to be Calibur.
-        await new Promise((r) => setTimeout(r, 2500));
+        setBusy(false);
+        return;
       }
 
-      // Step B — fetch the typed-data envelope from the relayer.
-      setStep("register");
+      // Switch wallet to Base before signing.
+      const provider = (window as { ethereum?: EthereumProvider }).ethereum;
+      if (!provider) throw new Error("No wallet provider available");
+      try {
+        await provider.request({
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: "0x2105" }],
+        });
+      } catch {
+        // some wallets don't expose this; ignore
+      }
+
+      // Server builds the registration batch (register + update). Returns
+      // the typed-data envelope + JSON-safe SignedBatchedCall struct.
+      setStep("sign");
       const envelope = await buildRegistration(address);
 
-      // Step C — user signs the EIP-712 typed data (no transaction).
-      // viem's signTypedData uses tightly inferred generics; cast the args
-      // since the typehashes come back from the server as plain JSON.
-      const sig = (await walletClient.signTypedData({
-        account: walletClient.account!,
-        domain: envelope.typedData.domain,
-        types: envelope.typedData.types,
-        primaryType: envelope.typedData.primaryType,
-        message: reviveSignedBatchedCall(envelope.signedBatchedCall),
-        // biome-ignore lint/suspicious/noExplicitAny: viem typed-data generics
-      } as any)) as Hex;
+      const typedData = {
+        types: EIP712_TYPES,
+        primaryType: "SignedBatchedCall",
+        domain: {
+          name: "Calibur",
+          version: "1.0.0",
+          chainId: BASE_CHAIN_ID,
+          verifyingContract: address,
+          salt: CALIBUR_DOMAIN_SALT,
+        },
+        message: envelope.signedBatchedCall,
+      };
 
-      // Step D — relayer submits the registration call paying gas.
+      const signature = (await provider.request({
+        method: "eth_signTypedData_v4",
+        params: [address, JSON.stringify(typedData)],
+      })) as Hex;
+
+      // Relayer submits Calibur.execute(SignedBatchedCall, signature).
+      setStep("relaying");
       const relay = await relayAgent({
         owner: address,
         signedBatchedCall: envelope.signedBatchedCall,
-        signature: sig,
+        signature,
       });
+
+      toast("Agent registration submitted", {
+        description: `Tx ${shortAddress(relay.txHash)} on Base.`,
+        action: {
+          label: "View on BaseScan",
+          onClick: () => {
+            window.open(
+              explorerTxUrl("base", relay.txHash),
+              "_blank",
+              "noopener,noreferrer",
+            );
+          },
+        },
+      });
+
+      try {
+        await publicClient.waitForTransactionReceipt({
+          hash: relay.txHash,
+          timeout: 60_000,
+        });
+      } catch {
+        // best-effort wait — backend may have already confirmed
+      }
 
       markDelegated(CALIBUR_SINGLETON);
-      toast("Agent registered", {
-        description: `Tx ${shortAddress(relay.txHash)} on Base.`,
-      });
-
+      // Re-read on-chain so banner/status bar reflect actual registration.
+      await refreshAgentStatus(address).catch(() => {});
       void enableKeeper(address).catch(() => {
-        // keeper offline — agent still works, just no auto-trigger
+        // keeper offline — agent still works, no auto-trigger
       });
 
       setStep("active");
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : "Could not sign authorization";
-      toast("Delegation failed", { description: message });
+        err instanceof Error ? err.message : "Could not activate agent";
+      toast("Activation failed", { description: message });
       setStep("prepare");
     } finally {
       setBusy(false);
@@ -198,7 +250,7 @@ export function DelegationModal({ open, onClose }: DelegationModalProps) {
           </button>
         </header>
 
-        <Stepper step={step} skipDelegate={alreadyDelegatedToCalibur} />
+        <Stepper step={step} />
 
         {step === "prepare" && (
           <>
@@ -210,24 +262,24 @@ export function DelegationModal({ open, onClose }: DelegationModalProps) {
                 <li className="flex gap-2">
                   <span className="text-muted-soft shrink-0">1.</span>
                   <span>
-                    {alreadyDelegatedToCalibur
-                      ? "Your wallet is already a smart account (Calibur via EIP-7702)."
-                      : "Your wallet delegates to the Calibur smart account (EIP-7702)."}
+                    Your wallet must already be delegated to Calibur — Uniswap
+                    Wallet (Smart Wallet enabled, after first tx) or Coinbase
+                    Smart Wallet does this for you.
                   </span>
                 </li>
                 <li className="flex gap-2">
                   <span className="text-muted-soft shrink-0">2.</span>
                   <span>
-                    The MOAI agent's key is registered on your account with a
-                    30-day expiry and a hook that whitelists Uniswap v4 + Li.Fi
-                    Earn calls only.
+                    You sign one EIP-712 typed-data message (no transaction)
+                    that registers the agent's key with a 30-day expiry + a hook
+                    that whitelists Uniswap v4 + Li.Fi Earn calls.
                   </span>
                 </li>
                 <li className="flex gap-2">
                   <span className="text-muted-soft shrink-0">3.</span>
                   <span>
-                    Funds never leave your wallet. The agent submits batched
-                    calls; the hook validates each one before execution.
+                    Our relayer submits that signature on-chain and pays the
+                    gas. Funds never leave your wallet.
                   </span>
                 </li>
               </ol>
@@ -262,7 +314,7 @@ export function DelegationModal({ open, onClose }: DelegationModalProps) {
             <button
               type="button"
               onClick={handleContinue}
-              disabled={!walletClient || !hookAddress || busy}
+              disabled={!address || !hookAddress || busy}
               className="bg-brand hover:bg-brand-hover inline-flex h-11 items-center justify-center gap-2 rounded-full text-sm font-semibold tracking-tight text-white transition-colors active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
             >
               <ShieldCheck className="h-4 w-4" aria-hidden />
@@ -271,28 +323,27 @@ export function DelegationModal({ open, onClose }: DelegationModalProps) {
           </>
         )}
 
-        {step === "delegate" && (
+        {step === "sign" && (
           <div className="bg-elevated flex flex-col items-center gap-3 rounded-xl p-6 text-center">
             <Loader2 className="text-brand h-6 w-6 animate-spin" aria-hidden />
             <div className="text-main text-sm font-semibold tracking-tight">
-              Awaiting EIP-7702 signature…
+              Sign the registration message
             </div>
             <p className="text-muted text-[11px] leading-snug">
-              Sign the authorization in your wallet. This sets your wallet's
-              code to the Calibur smart account.
+              Approve the typed-data signature in your wallet. No transaction,
+              no gas — our relayer submits it.
             </p>
           </div>
         )}
 
-        {step === "register" && (
+        {step === "relaying" && (
           <div className="bg-elevated flex flex-col items-center gap-3 rounded-xl p-6 text-center">
             <Loader2 className="text-brand h-6 w-6 animate-spin" aria-hidden />
             <div className="text-main text-sm font-semibold tracking-tight">
-              Sign agent registration
+              Relaying to Base…
             </div>
             <p className="text-muted text-[11px] leading-snug">
-              Sign the EIP-712 typed-data message in your wallet — no
-              transaction here. Our relayer submits it for you.
+              Tx submitted by the relayer. Waiting for confirmation.
             </p>
           </div>
         )}
@@ -330,26 +381,17 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Stepper({
-  step,
-  skipDelegate,
-}: {
-  step: Step;
-  skipDelegate: boolean;
-}) {
-  const allSteps: Array<{
+function Stepper({ step }: { step: Step }) {
+  const steps: Array<{
     key: Step;
     label: string;
     icon: typeof ShieldCheck;
   }> = [
     { key: "prepare", label: "Prepare", icon: ShieldCheck },
-    { key: "delegate", label: "Delegate", icon: KeyRound },
-    { key: "register", label: "Register", icon: Send },
+    { key: "sign", label: "Sign", icon: KeyRound },
+    { key: "relaying", label: "Relay", icon: Send },
     { key: "active", label: "Active", icon: Sparkles },
   ];
-  const steps = skipDelegate
-    ? allSteps.filter((s) => s.key !== "delegate")
-    : allSteps;
   const currentIndex = steps.findIndex((s) => s.key === step);
 
   return (

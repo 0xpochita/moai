@@ -208,18 +208,17 @@ export async function relaySignedBatch(args: {
     args: [args.signedBatchedCall, wrapped],
   });
 
-  // Total ETH value the inner calls will move.
-  const totalValue = args.signedBatchedCall.batchedCall.calls.reduce(
-    (sum, c) => sum + c.value,
-    0n,
-  );
-
+  // The relayer pays gas only — never forwards `value`. Each inner call
+  // pulls ETH from the user's EOA balance (since Calibur runs as that
+  // EOA's bytecode). Manual gas cap skips eth_estimateGas which can
+  // misbehave on 7702-delegated EOAs.
   return wallet.sendTransaction({
     account: wallet.account,
     chain: wallet.chain,
     to: args.userEoa,
     data,
-    value: totalValue,
+    value: 0n,
+    gas: 1_500_000n,
     chainId: BASE_CHAIN_ID,
   });
 }

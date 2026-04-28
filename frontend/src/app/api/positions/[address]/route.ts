@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { fetchPositionsOnChain, mockPositions } from "@/services/server";
+import { fetchPositionsOnChain } from "@/services/server";
 
 export const dynamic = "force-dynamic";
 
@@ -18,16 +18,6 @@ export async function GET(
     );
   }
 
-  const url = new URL(request.url);
-  const forceDemo = url.searchParams.get("demo") === "1";
-
-  if (forceDemo) {
-    return NextResponse.json({
-      positions: mockPositions(address),
-      source: "mock",
-    });
-  }
-
   try {
     const positions = await fetchPositionsOnChain(address, request.signal);
     return NextResponse.json({
@@ -38,10 +28,7 @@ export async function GET(
     if (request.signal.aborted) {
       return NextResponse.json({ error: "aborted" }, { status: 499 });
     }
-    console.warn("[/api/positions] on-chain failed:", err);
-    return NextResponse.json({
-      positions: mockPositions(address),
-      source: "mock-fallback",
-    });
+    const message = err instanceof Error ? err.message : "on-chain read failed";
+    return NextResponse.json({ error: message }, { status: 502 });
   }
 }

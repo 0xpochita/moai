@@ -1,10 +1,10 @@
 "use client";
 
 import { ShieldCheck, Sparkles } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { usePublicClient, useWalletClient } from "wagmi";
-import { getGuardedHookAddress, shortAddress } from "@/lib";
-import { useDelegationStore } from "@/store";
+import { getCaliburHookAddress, shortAddress } from "@/lib";
+import { useAgentStatusStore, useDelegationStore, useUiStore } from "@/store";
 import { DelegationModal } from "./DelegationModal";
 
 const BASE_CHAIN_ID = 8453;
@@ -13,14 +13,18 @@ export function DelegationBanner() {
   const { data: walletClient } = useWalletClient({ chainId: BASE_CHAIN_ID });
   const publicClient = usePublicClient({ chainId: BASE_CHAIN_ID });
 
-  const status = useDelegationStore((s) => s.status);
-  const delegateAddress = useDelegationStore((s) => s.delegateAddress);
   const walletAddress = useDelegationStore((s) => s.walletAddress);
   const check = useDelegationStore((s) => s.check);
   const clear = useDelegationStore((s) => s.clear);
 
-  const hookAddress = getGuardedHookAddress();
-  const [modalOpen, setModalOpen] = useState(false);
+  const agentStatus = useAgentStatusStore((s) => s.status);
+  const refreshAgentStatus = useAgentStatusStore((s) => s.refresh);
+
+  const hookAddress = getCaliburHookAddress();
+
+  const modalOpen = useUiStore((s) => s.delegationModalOpen);
+  const openModal = useUiStore((s) => s.openDelegationModal);
+  const closeModal = useUiStore((s) => s.closeDelegationModal);
 
   const account = walletClient?.account?.address ?? null;
 
@@ -32,18 +36,23 @@ export function DelegationBanner() {
     }
     if (walletAddress?.toLowerCase() !== account.toLowerCase()) {
       void check(publicClient, account);
+      void refreshAgentStatus(account);
     }
-  }, [publicClient, account, walletAddress, check, clear]);
+  }, [publicClient, account, walletAddress, check, clear, refreshAgentStatus]);
 
   if (!account) return null;
-  if (status === "delegated") return null;
 
-  const isMatchingDelegate =
-    delegateAddress && hookAddress
-      ? delegateAddress.toLowerCase() === hookAddress.toLowerCase()
-      : false;
+  // Truth: hide banner only when on-chain agent is fully wired up
+  // (Calibur-delegated AND agent key registered). Stale local state
+  // can't fool this check.
+  const isAgentLive = Boolean(
+    agentStatus?.caliburDelegated && agentStatus?.agentRegistered,
+  );
 
-  if (isMatchingDelegate) return null;
+  if (isAgentLive) {
+    // Banner hidden; modal still mounted so other components can open it.
+    return <DelegationModal open={modalOpen} onClose={closeModal} />;
+  }
 
   const ready = Boolean(walletClient && hookAddress);
 
@@ -60,9 +69,9 @@ export function DelegationBanner() {
               Enable agent migrations
             </div>
             <p className="text-muted mt-1 text-xs leading-snug">
-              Sign one EIP-7702 delegation so the MOAI agent can move
-              out-of-range positions to a Li.Fi Earn vault. Funds stay in your
-              wallet — the GuardedExecutorHook only allows whitelisted calls
+              Sign once so the MOAI agent can move out-of-range positions to a
+              Li.Fi Earn vault. Funds stay in your wallet — the validator hook
+              only allows whitelisted calls
               {hookAddress ? ` (${shortAddress(hookAddress)})` : ""}.
             </p>
           </div>
@@ -70,7 +79,7 @@ export function DelegationBanner() {
 
         <button
           type="button"
-          onClick={() => setModalOpen(true)}
+          onClick={openModal}
           disabled={!ready}
           className="bg-brand hover:bg-brand-hover inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-full px-4 text-xs font-semibold tracking-tight text-white transition-colors active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
         >
@@ -79,7 +88,7 @@ export function DelegationBanner() {
         </button>
       </section>
 
-      <DelegationModal open={modalOpen} onClose={() => setModalOpen(false)} />
+      <DelegationModal open={modalOpen} onClose={closeModal} />
     </>
   );
 }

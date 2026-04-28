@@ -7,6 +7,7 @@ export {
   ROOT_KEY_HASH,
 } from "./abi";
 export {
+  CALIBUR_DOMAIN_SALT,
   CALIBUR_TYPES,
   type CaliburBatchedCall,
   type CaliburCall,
