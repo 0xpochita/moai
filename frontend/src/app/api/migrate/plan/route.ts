@@ -4,10 +4,13 @@ import { buildMigrationPlan } from "@/services/server";
 export const dynamic = "force-dynamic";
 
 const ADDRESS_PATTERN = /^0x[a-fA-F0-9]{40}$/;
+const RISK_PROFILES = ["conservative", "balanced", "aggressive"] as const;
+type RiskProfile = (typeof RISK_PROFILES)[number];
 
 interface RequestBody {
   owner?: string;
   tokenId?: string;
+  riskProfile?: string;
 }
 
 export async function POST(request: Request) {
@@ -30,8 +33,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid tokenId" }, { status: 400 });
   }
 
+  const riskProfile: RiskProfile = RISK_PROFILES.includes(
+    body.riskProfile as RiskProfile,
+  )
+    ? (body.riskProfile as RiskProfile)
+    : "balanced";
+
   try {
-    const plan = await buildMigrationPlan(owner, tokenId, request.signal);
+    const plan = await buildMigrationPlan(owner, tokenId, request.signal, {
+      riskProfile,
+    });
     return NextResponse.json({ plan });
   } catch (err) {
     if (request.signal.aborted) {

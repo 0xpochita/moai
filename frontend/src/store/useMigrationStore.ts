@@ -8,6 +8,7 @@ import {
 import { fetchMigrationPlan, fetchWithdrawalPlan } from "@/services";
 import type { MigrationPlan, MigrationStatus } from "@/types";
 import { useAgentActionsStore } from "./useAgentActionsStore";
+import { useSettingsStore } from "./useSettingsStore";
 
 const BASE_CHAIN_ID = 8453;
 
@@ -69,7 +70,11 @@ export const useMigrationStore = create<MigrationState>((set, get) => ({
       txHash: null,
     });
     try {
-      const plan = await fetchMigrationPlan(owner, tokenId, next.signal);
+      const riskProfile = useSettingsStore.getState().riskProfile;
+      const plan = await fetchMigrationPlan(owner, tokenId, {
+        riskProfile,
+        signal: next.signal,
+      });
       if (next.signal.aborted) return;
       set({ status: "ready", plan, controller: null });
     } catch (err) {

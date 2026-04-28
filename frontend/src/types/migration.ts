@@ -21,6 +21,11 @@ export interface MigrationYield {
   apyPercent: number;
 }
 
+export interface MigrationPlanTokenRef {
+  symbol: string;
+  logoUrl: string;
+}
+
 export interface MigrationPlan {
   intent: MigrationIntent;
   positionTokenId: string;
@@ -33,6 +38,9 @@ export interface MigrationPlan {
     feeTier: number;
     poolAddress: string;
     status: Position["status"];
+    protocolLogoKey?: string;
+    token0?: MigrationPlanTokenRef;
+    token1?: MigrationPlanTokenRef;
   };
   destination: DestinationVault;
   legs: MigrationLeg[];

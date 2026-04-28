@@ -21,21 +21,38 @@ function pickStableSide(): "USDC" {
   return "USDC";
 }
 
+type RiskProfile = "conservative" | "balanced" | "aggressive";
+
+const SAFE_PROTOCOLS = new Set(["morpho-v1", "aave-v3", "compound-v3", "lido"]);
+
 async function pickBestVault(
   asset: string,
+  riskProfile: RiskProfile,
   signal?: AbortSignal,
 ): Promise<DestinationVault | null> {
+  const tvlFloor = riskProfile === "aggressive" ? 100_000 : 500_000;
   const vaults = await fetchVaults(
     {
       chainId: 8453,
       asset,
-      sortBy: "apy",
-      limit: 12,
+      sortBy: riskProfile === "conservative" ? "tvl" : "apy",
+      limit: 24,
       trustedOnly: true,
-      minTvlUsd: 500_000,
+      minTvlUsd: tvlFloor,
     },
     signal,
   ).catch(() => [] as DestinationVault[]);
+
+  if (riskProfile === "conservative") {
+    const safe = vaults.filter((v) => SAFE_PROTOCOLS.has(v.protocolName));
+    const sorted = safe.length > 0 ? safe : vaults;
+    return [...sorted].sort((a, b) => b.tvlUsd - a.tvlUsd)[0] ?? null;
+  }
+
+  if (riskProfile === "aggressive") {
+    return [...vaults].sort((a, b) => b.apyTotal - a.apyTotal)[0] ?? null;
+  }
+
   return vaults[0] ?? null;
 }
 
@@ -91,6 +108,7 @@ export async function buildMigrationPlan(
   ownerAddress: string,
   positionTokenId: string,
   signal?: AbortSignal,
+  options?: { riskProfile?: RiskProfile },
 ): Promise<MigrationPlan> {
   const owner = getAddress(ownerAddress);
   const positions = await fetchPositionsOnChain(owner, signal);
@@ -100,7 +118,8 @@ export async function buildMigrationPlan(
   }
 
   const desiredStable = pickStableSide();
-  const destination = await pickBestVault(desiredStable, signal);
+  const riskProfile = options?.riskProfile ?? "balanced";
+  const destination = await pickBestVault(desiredStable, riskProfile, signal);
   if (!destination) {
     throw new Error("No trusted vault available for migration");
   }
@@ -168,6 +187,15 @@ export async function buildMigrationPlan(
       feeTier: position.feeTier,
       poolAddress: position.poolAddress,
       status: position.status,
+      protocolLogoKey: "uniswap",
+      token0: {
+        symbol: position.token0.symbol,
+        logoUrl: position.token0.logoUrl,
+      },
+      token1: {
+        symbol: position.token1.symbol,
+        logoUrl: position.token1.logoUrl,
+      },
     },
     destination,
     legs: [

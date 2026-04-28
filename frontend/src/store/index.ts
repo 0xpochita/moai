@@ -11,5 +11,7 @@ export { selectTotals, usePositionsStore } from "./usePositionsStore";
 export {
   ALL_TRUSTED_PROTOCOLS,
   type ProtocolKey,
+  RISK_PROFILES,
+  type RiskProfile,
   useSettingsStore,
 } from "./useSettingsStore";

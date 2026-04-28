@@ -5,16 +5,22 @@ interface PlanResponse {
   error?: string;
 }
 
+export type RiskProfileWire = "conservative" | "balanced" | "aggressive";
+
 export async function fetchMigrationPlan(
   owner: string,
   tokenId: string,
-  signal?: AbortSignal,
+  options?: { riskProfile?: RiskProfileWire; signal?: AbortSignal },
 ): Promise<MigrationPlan> {
   const res = await fetch("/api/migrate/plan", {
     method: "POST",
-    signal,
+    signal: options?.signal,
     headers: { "content-type": "application/json", accept: "application/json" },
-    body: JSON.stringify({ owner, tokenId }),
+    body: JSON.stringify({
+      owner,
+      tokenId,
+      riskProfile: options?.riskProfile,
+    }),
   });
 
   const json = (await res.json()) as PlanResponse;

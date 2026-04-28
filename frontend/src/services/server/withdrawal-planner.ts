@@ -107,6 +107,11 @@ export async function buildWithdrawalPlan(
     feeTier: holding.apyTotal,
     poolAddress: vault,
     status: "in-range",
+    protocolLogoKey: holding.protocolName,
+    token0: {
+      symbol: holding.underlyingTokenSymbol,
+      logoUrl: `https://dd.dexscreener.com/ds-data/tokens/base/${holding.underlyingTokenAddress.toLowerCase()}.png`,
+    },
   };
 
   return {

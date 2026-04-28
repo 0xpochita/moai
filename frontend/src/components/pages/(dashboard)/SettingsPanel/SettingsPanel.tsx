@@ -8,6 +8,7 @@ import {
   type ProtocolKey,
   useSettingsStore,
 } from "@/store";
+import { RiskProfilePicker } from "./RiskProfilePicker";
 
 export function SettingsPanel() {
   const [open, setOpen] = useState(false);
@@ -75,6 +76,15 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
             <X className="h-4 w-4" aria-hidden />
           </button>
         </header>
+
+        <section className="bg-elevated flex flex-col gap-2 rounded-xl p-4">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-main text-xs font-semibold tracking-tight">
+              Risk profile
+            </span>
+          </div>
+          <RiskProfilePicker variant="stacked" />
+        </section>
 
         <section className="bg-elevated flex flex-col gap-2 rounded-xl p-4">
           <div className="flex items-center justify-between gap-3">

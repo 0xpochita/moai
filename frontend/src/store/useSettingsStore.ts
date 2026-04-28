@@ -16,13 +16,17 @@ const TRUSTED_PROTOCOLS = [
 
 export type ProtocolKey = (typeof TRUSTED_PROTOCOLS)[number];
 
+export type RiskProfile = "conservative" | "balanced" | "aggressive";
+
 interface SettingsState {
   minApyPct: number;
   maxGasUsd: number;
   allowedProtocols: ProtocolKey[];
+  riskProfile: RiskProfile;
   setMinApyPct: (pct: number) => void;
   setMaxGasUsd: (usd: number) => void;
   toggleProtocol: (key: ProtocolKey) => void;
+  setRiskProfile: (profile: RiskProfile) => void;
   resetDefaults: () => void;
 }
 
@@ -30,9 +34,34 @@ const DEFAULTS = {
   minApyPct: 3,
   maxGasUsd: 5,
   allowedProtocols: [...TRUSTED_PROTOCOLS] as ProtocolKey[],
+  riskProfile: "balanced" as RiskProfile,
 };
 
 export const ALL_TRUSTED_PROTOCOLS: ProtocolKey[] = [...TRUSTED_PROTOCOLS];
+
+export const RISK_PROFILES: Array<{
+  key: RiskProfile;
+  label: string;
+  description: string;
+}> = [
+  {
+    key: "conservative",
+    label: "Conservative",
+    description:
+      "Highest-TVL bluechips (Aave, Morpho, Compound). Caps APY for safety.",
+  },
+  {
+    key: "balanced",
+    label: "Balanced",
+    description: "Best APY across the trusted protocol list. Default.",
+  },
+  {
+    key: "aggressive",
+    label: "Aggressive",
+    description:
+      "Maximum APY with relaxed TVL floor. Higher risk, higher reward.",
+  },
+];
 
 export const useSettingsStore = create<SettingsState>()(
   persist(
@@ -50,6 +79,7 @@ export const useSettingsStore = create<SettingsState>()(
               : [...s.allowedProtocols, key],
           };
         }),
+      setRiskProfile: (profile) => set({ riskProfile: profile }),
       resetDefaults: () => set({ ...DEFAULTS }),
     }),
     { name: "moai-settings-v1" },

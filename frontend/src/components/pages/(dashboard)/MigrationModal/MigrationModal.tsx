@@ -4,7 +4,12 @@ import { CheckCircle2, Loader2, ShieldCheck, X } from "lucide-react";
 import { useEffect } from "react";
 import { toast } from "sonner";
 import { useAccount, useWalletClient } from "wagmi";
-import { Badge, Skeleton } from "@/components/ui";
+import {
+  Badge,
+  ProtocolAvatar,
+  Skeleton,
+  TokenPairLogos,
+} from "@/components/ui";
 import { formatPercent, formatProtocolName, formatUsd } from "@/lib";
 import {
   useHoldingsStore,
@@ -112,17 +117,36 @@ export function MigrationModal() {
         {(ready || status === "executing" || status === "complete") && plan && (
           <>
             <section className="bg-brand-soft/50 flex items-center justify-between gap-3 rounded-xl px-4 py-3">
-              <div className="min-w-0">
-                <div className="text-muted text-[10px] font-medium tracking-wide uppercase">
-                  From
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="relative flex shrink-0 items-center">
+                  {plan.source.token0 && (
+                    <TokenPairLogos
+                      token0={plan.source.token0}
+                      token1={plan.source.token1 ?? plan.source.token0}
+                      size="sm"
+                    />
+                  )}
+                  {plan.source.protocolLogoKey && (
+                    <span className="bg-surface ring-soft absolute -right-1 -bottom-1 inline-flex h-4 w-4 items-center justify-center overflow-hidden rounded-full">
+                      <ProtocolAvatar
+                        protocolName={plan.source.protocolLogoKey}
+                        size={16}
+                      />
+                    </span>
+                  )}
                 </div>
-                <div className="text-main truncate text-sm font-semibold tracking-tight">
-                  {plan.source.pair}
-                </div>
-                <div className="text-muted truncate text-[10px]">
-                  {isWithdraw
-                    ? `Vault on ${plan.source.chain}`
-                    : `Uniswap ${plan.source.protocol} · ${formatPercent(plan.source.feeTier, 2)} · ${plan.source.chain}`}
+                <div className="min-w-0">
+                  <div className="text-muted text-[10px] font-medium tracking-wide uppercase">
+                    From
+                  </div>
+                  <div className="text-main truncate text-sm font-semibold tracking-tight">
+                    {plan.source.pair}
+                  </div>
+                  <div className="text-muted truncate text-[10px]">
+                    {isWithdraw
+                      ? `${formatProtocolName(plan.source.protocolLogoKey ?? "Vault")} · ${plan.source.chain}`
+                      : `Uniswap ${plan.source.protocol} · ${formatPercent(plan.source.feeTier, 2)} · ${plan.source.chain}`}
+                  </div>
                 </div>
               </div>
               <div className="text-right">
@@ -132,22 +156,28 @@ export function MigrationModal() {
                 {isWithdraw ? (
                   <Badge tone="outline">Holding</Badge>
                 ) : (
-                  <Badge tone="warning">Out of range</Badge>
+                  <Badge tone="danger">Out of range</Badge>
                 )}
               </div>
             </section>
 
             <section className="bg-success-soft/40 flex items-center justify-between gap-3 rounded-xl px-4 py-3">
-              <div className="min-w-0">
-                <div className="text-muted text-[10px] font-medium tracking-wide uppercase">
-                  To
-                </div>
-                <div className="text-main truncate text-sm font-semibold tracking-tight">
-                  {plan.destination.name}
-                </div>
-                <div className="text-muted truncate text-[10px]">
-                  {formatProtocolName(plan.destination.protocolName)} ·{" "}
-                  {plan.destination.underlyingTokenSymbol}
+              <div className="flex min-w-0 items-center gap-3">
+                <ProtocolAvatar
+                  protocolName={plan.destination.protocolName}
+                  size={32}
+                />
+                <div className="min-w-0">
+                  <div className="text-muted text-[10px] font-medium tracking-wide uppercase">
+                    To
+                  </div>
+                  <div className="text-main truncate text-sm font-semibold tracking-tight">
+                    {plan.destination.name}
+                  </div>
+                  <div className="text-muted truncate text-[10px]">
+                    {formatProtocolName(plan.destination.protocolName)} ·{" "}
+                    {plan.destination.underlyingTokenSymbol}
+                  </div>
                 </div>
               </div>
               <div className="text-right">

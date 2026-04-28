@@ -1,10 +1,17 @@
 "use client";
 
-import { ArrowRightLeft, ArrowUpRight } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowRight,
+  ArrowUpRight,
+  CheckCircle2,
+  XCircle,
+} from "lucide-react";
+import Image from "next/image";
 import { Badge, TokenPairLogos } from "@/components/ui";
 import { explorerAddressUrl, formatPercent, formatUsd } from "@/lib";
 import { useMigrationStore } from "@/store";
-import type { Position } from "@/types";
+import type { Position, PositionStatus } from "@/types";
 import { PositionActivity } from "./PositionActivity";
 import { PositionNetworkPill } from "./PositionNetworkPill";
 
@@ -51,7 +58,10 @@ export function PositionCard({ position }: PositionCardProps) {
             </div>
           </div>
         </div>
-        <PositionNetworkPill networkId={position.network} />
+        <div className="flex flex-col items-end gap-1.5">
+          <PositionNetworkPill networkId={position.network} />
+          <PositionStatusPill status={position.status} />
+        </div>
       </header>
 
       <div className="grid grid-cols-3 gap-3">
@@ -98,15 +108,61 @@ export function PositionCard({ position }: PositionCardProps) {
         <button
           type="button"
           onClick={handleMigrate}
-          className="bg-brand hover:bg-brand-hover inline-flex h-10 items-center justify-center gap-2 rounded-full text-xs font-semibold tracking-tight text-white transition-colors active:scale-[0.98]"
+          className="bg-brand hover:bg-brand-hover inline-flex h-11 items-center justify-between gap-3 rounded-full px-2 text-xs font-semibold tracking-tight text-white transition-colors active:scale-[0.98]"
         >
-          <ArrowRightLeft className="h-3.5 w-3.5" aria-hidden />
-          Migrate to Earn vault
+          <span className="bg-white/15 inline-flex items-center rounded-full px-1.5 py-1">
+            <TokenPairLogos
+              token0={position.token0}
+              token1={position.token1}
+              size="sm"
+            />
+          </span>
+          <span className="flex items-center gap-1.5">
+            Migrate to Earn vault
+            <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+          </span>
+          <span className="bg-white inline-flex h-7 items-center justify-center rounded-full px-2.5">
+            <Image
+              src="/Assets/Images/logo-brand/lifi_brand_assets/SVG/logo_lifi_light_horizontal.svg"
+              alt="Li.Fi Earn"
+              width={48}
+              height={14}
+              className="h-3.5 w-auto"
+            />
+          </span>
         </button>
       )}
 
       <PositionActivity position={position} />
     </article>
+  );
+}
+
+const STATUS_CONFIG: Record<
+  PositionStatus,
+  {
+    label: string;
+    tone: "success" | "danger" | "outline";
+    icon: typeof CheckCircle2;
+  }
+> = {
+  "in-range": { label: "In range", tone: "success", icon: CheckCircle2 },
+  "out-of-range": {
+    label: "Out of range",
+    tone: "danger",
+    icon: AlertTriangle,
+  },
+  closed: { label: "Closed", tone: "outline", icon: XCircle },
+};
+
+function PositionStatusPill({ status }: { status: PositionStatus }) {
+  const cfg = STATUS_CONFIG[status];
+  const Icon = cfg.icon;
+  return (
+    <Badge tone={cfg.tone}>
+      <Icon className="h-3 w-3" aria-hidden />
+      {cfg.label}
+    </Badge>
   );
 }
 
