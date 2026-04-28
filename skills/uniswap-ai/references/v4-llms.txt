@@ -1,0 +1,308 @@
+# Uniswap v4 — Detailed LLM Context
+
+> Source: https://developers.uniswap.org
+> This file provides verbose, inline context for LLMs with large context windows.
+
+---
+
+## Architecture Overview
+
+Uniswap v4 replaces the factory pattern (one contract per pool) with a **singleton PoolManager** that holds all pools in a single contract. This dramatically reduces gas costs for pool creation and multi-hop swaps.
+
+Key architectural changes from v3:
+- **Singleton design**: All pools live in one `PoolManager` contract
+- **Hooks**: Customizable entry points that run developer logic before/after swaps and liquidity operations
+- **Flash accounting**: Token deltas accumulate during a transaction and settle at the end
+- **ERC-6909**: Multi-token standard for gas-efficient internal balance claims
+- **Dynamic fees**: Hooks can adjust LP fees in real time based on market conditions
+- **Subscribers**: Contracts that receive notifications about position changes, enabling liquidity mining without transferring ownership
+
+---
+
+## Concepts
+
+### PoolManager
+- [Docs](/docs/protocols/v4/concepts/poolmanager)
+- In v3, each pool was a separate contract deployed through a Factory. In v4, the singleton `PoolManager` holds all pool state, reducing gas for creation and multi-hop swaps. Pool operations require unlocking the `PoolManager`, performing actions, then settling all deltas before re-locking.
+
+### v4 vs v3
+- [Docs](/docs/protocols/v4/concepts/v4-vs-v3)
+- v4 inherits concentrated liquidity from v3 but differs in architecture (singleton vs factory), accounting (flash accounting vs immediate transfers), and extensibility (hooks). Positions are still ERC-721 via `PositionManager`, but the underlying mechanics are simplified.
+
+### Hooks
+- [Docs](/docs/protocols/v4/concepts/hooks)
+- Hooks are smart contracts that execute custom logic at specific points in a pool's lifecycle. Hook permissions are encoded in the hook contract's address (specific bits indicate which callbacks are active). Available hook points: `beforeInitialize`, `afterInitialize`, `beforeAddLiquidity`, `afterAddLiquidity`, `beforeRemoveLiquidity`, `afterRemoveLiquidity`, `beforeSwap`, `afterSwap`, `beforeDonate`, `afterDonate`.
+
+### Hook Routing
+- [Docs](/docs/protocols/v4/concepts/hook-routing)
+- The Uniswap Interface progressively adds support for hooks in its standard routing. Hook builders can get immediate interface flow by running a UniswapX filler for their hooked pools.
+
+### Flash Accounting
+- [Docs](/docs/protocols/v4/concepts/flash-accounting)
+- Instead of transferring tokens between contracts at each step (like v2/v3), v4 tracks balance deltas throughout a transaction. At the end, all deltas must net to zero or the transaction reverts. This eliminates intermediate token transfers in multi-hop swaps.
+
+### ERC-6909
+- [Docs](/docs/protocols/v4/concepts/erc-6909)
+- A multi-token standard that allows the `PoolManager` to handle internal balances efficiently. Users can mint/burn claim tokens instead of transferring ERC-20s for every operation, saving gas.
+
+### Dynamic Fees
+- [Docs](/docs/protocols/v4/concepts/dynamic-fees)
+- Hooks can implement dynamic fee logic that adjusts LP fees based on market conditions (volatility, volume, etc.). Pools can be initialized with a dynamic fee flag, and the hook's `getFee` function is called before each swap.
+
+### Subscribers
+- [Docs](/docs/protocols/v4/concepts/subscribers)
+- Position owners can subscribe to a contract that receives notifications on position modifications (increase/decrease liquidity, transfers). Unlike v3 liquidity mining (which required transferring the position to a staking contract), subscribers observe without taking custody.
+
+---
+
+## Guides
+
+### Getting Started
+- [Docs](/docs/protocols/v4/guides/getting-started)
+- Setup guide for building on v4, including dependencies and development environment.
+
+### Create Pool
+- [Docs](/docs/protocols/v4/guides/create-pool)
+- Pool creation is permissionless. A pool is identified by a `PoolKey` containing: `currency0`, `currency1` (sorted), `fee`, `tickSpacing`, and `hooks` address. Pools are initialized with `PoolManager.initialize(key, sqrtPriceX96)`.
+
+### Swapping
+
+#### Getting Started with Swaps
+- [Docs](/docs/protocols/v4/guides/swapping/getting-started)
+
+#### Executing Swaps
+- [Docs](/docs/protocols/v4/guides/swapping/swapping)
+- Although direct `PoolManager` interaction is possible, the **Universal Router** is recommended. It abstracts the unlock/callback pattern and supports v2, v3, and v4 pools in a single transaction.
+
+#### Swap Routing
+- [Docs](/docs/protocols/v4/guides/swapping/routing)
+- The Universal Router uses a command-based pattern. Developers encode commands and parameters, and the router executes them sequentially. This enables complex multi-hop, multi-protocol swaps.
+
+### Managing Liquidity
+
+#### Overview
+- [Docs](/docs/protocols/v4/guides/managing-liquidity/overview)
+
+#### Mint Position
+- [Docs](/docs/protocols/v4/guides/managing-liquidity/mint-position)
+- Positions are minted as ERC-721 tokens via `PositionManager`. The command-based interface encodes operations (mint, increase, decrease, burn) as batched commands in a single transaction.
+
+#### Increase / Decrease Liquidity
+- [Increase](/docs/protocols/v4/guides/managing-liquidity/increase-liquidity) · [Decrease](/docs/protocols/v4/guides/managing-liquidity/decrease-liquidity)
+- `PositionManager` uses encoded commands. `INCREASE_LIQUIDITY` and `DECREASE_LIQUIDITY` require the `tokenId`, `liquidity` delta, and slippage parameters.
+
+#### Collect Fees
+- [Docs](/docs/protocols/v4/guides/managing-liquidity/collect-fees)
+- Fees accrue in the pool and are collected through the `PositionManager` by calling `DECREASE_LIQUIDITY` with a zero liquidity delta.
+
+#### Calculate Fees
+- [Docs](/docs/protocols/v4/guides/managing-liquidity/calculate-fees)
+
+#### Burn Position
+- [Docs](/docs/protocols/v4/guides/managing-liquidity/burn-liquidity)
+- Burning withdraws all remaining liquidity and clears the position data. More gas-efficient than decreasing to zero and then burning separately.
+
+#### Batch Operations
+- [Docs](/docs/protocols/v4/guides/managing-liquidity/batch-liquidity)
+- The command pattern enables batching: move liquidity between pools, mint + increase, or decrease + burn in a single transaction.
+
+### Hooks Development
+
+#### Building Your First Hook
+- [Docs](/docs/protocols/v4/guides/hooks/getting-started)
+- Step-by-step guide to creating a hook: set up a local environment, deploy `PoolManager`, write hook logic, and test.
+
+#### Swap Hooks
+- [Docs](/docs/protocols/v4/guides/hooks/swap-hooks)
+- `beforeSwap` and `afterSwap` — customize swap behavior, implement custom fees, or add access control.
+
+#### Liquidity Hooks
+- [Docs](/docs/protocols/v4/guides/hooks/liquidity-hooks)
+- `beforeAddLiquidity`, `afterAddLiquidity`, `beforeRemoveLiquidity`, `afterRemoveLiquidity` — restrict who can provide liquidity, implement custom reward logic, etc.
+
+#### Async Swap
+- [Docs](/docs/protocols/v4/guides/hooks/async-swap)
+- Custom accounting enables replacing v4's default swap logic entirely. The hook can implement a custom bonding curve or route to an external source.
+
+#### Accessing msg.sender
+- [Docs](/docs/protocols/v4/guides/hooks/accessing-msg.sender)
+- Since swaps go through a router, `msg.sender` inside a hook is the router contract, not the end user. This guide explains how to securely obtain the original caller.
+
+#### Hook Deployment
+- [Docs](/docs/protocols/v4/guides/hooks/hook-deployment)
+- Hook permissions are encoded in the contract address. Specific bits in the address indicate which callbacks the hook implements. Use `CREATE2` with salt mining to deploy to an address with the correct permission bits.
+
+### Advanced Guides
+
+#### Unlock Callback & Deltas
+- [Docs](/docs/protocols/v4/guides/unlock-callback-and-deltas)
+- The `PoolManager` must be unlocked before any operations. After unlocking, any number of swaps/liquidity operations can execute. At the end, all non-zero deltas must be settled (tokens transferred) or the transaction reverts.
+
+#### Reading Pool State
+- [Docs](/docs/protocols/v4/guides/read-pool-state)
+- v4 uses `StateLibrary` and `extsload` for reading pool data. Off-chain reads use the deployed `StateView` contract.
+
+#### Custom Accounting
+- [Docs](/docs/protocols/v4/guides/custom-accounting)
+- Hooks can implement custom accounting to create novel AMM designs: custom bonding curves, dynamic fee structures, or entirely new trading mechanisms.
+
+#### Flash Accounting Guide
+- [Docs](/docs/protocols/v4/guides/flash-accounting)
+- Practical guide to working with flash accounting: how deltas accumulate, how to settle them, and common patterns.
+
+#### StateView
+- [Docs](/docs/protocols/v4/guides/state-view)
+- A deployed contract with view functions for off-chain reads (frontends, analytics). On-chain contracts use `StateLibrary` directly.
+
+#### ERC-6909 Guide
+- [Docs](/docs/protocols/v4/guides/erc-6909)
+- When to use mint vs burn operations, how internal balances work, and implementation patterns.
+
+#### Subscriber Guide
+- [Docs](/docs/protocols/v4/guides/subscriber)
+- Implementing a subscriber contract for liquidity mining and position tracking notifications.
+
+#### Position Manager
+- [Docs](/docs/protocols/v4/guides/position-manager)
+- Deep dive into the command-based interface: encoding actions, batching operations, and managing positions programmatically.
+
+#### Troubleshooting
+- [Docs](/docs/protocols/v4/guides/troubleshooting)
+
+---
+
+## v4 SDK (TypeScript)
+
+- [SDK Overview](/docs/sdks/v4/overview)
+
+### Swapping with the SDK
+- [Quoting](/docs/sdks/v4/guides/swapping/quoting) — Get swap quotes using the Quoter contract via the SDK
+- [Single-Hop Swap](/docs/sdks/v4/guides/swapping/single-hop-swapping) — Execute a direct token-to-token swap
+- [Multi-Hop Swap](/docs/sdks/v4/guides/swapping/multi-hop-swapping) — Route through multiple pools
+
+### Liquidity with the SDK
+- [Mint Position](/docs/sdks/v4/guides/managing-liquidity/position-minting) — Create a new liquidity position
+- [Fetch Position](/docs/sdks/v4/guides/managing-liquidity/position-fetching) — Read position data on-chain
+- [Collect Fees](/docs/sdks/v4/guides/managing-liquidity/collect-fees) — Claim accrued fees
+- [Modify Position](/docs/sdks/v4/guides/managing-liquidity/modifying-position) — Increase or decrease liquidity
+
+### Other SDK Guides
+- [Create Pool](/docs/sdks/v4/guides/create-pool) — Initialize a new pool via the SDK
+- [Pool Data](/docs/sdks/v4/guides/pool-data) — Read pool state, ticks, and liquidity data
+
+---
+
+## Deployments
+
+- [All v4 Deployments](/docs/protocols/v4/deployments)
+
+Core contracts deployed on each supported chain:
+- **PoolManager**: Singleton holding all pool state
+- **PositionManager**: ERC-721 position management
+- **V4Quoter**: On-chain quoting for swaps
+- **StateView**: Read-only pool state access
+- **Universal Router**: Multi-protocol swap execution
+- **Permit2**: Token approval management
+
+---
+
+## Security
+
+- [Security](/docs/protocols/v4/security)
+- v4 has been audited by multiple firms. The singleton design reduces attack surface compared to the factory pattern. Hooks introduce new security considerations — each hook is an independent contract that must be audited separately.
+
+---
+
+## Core Contract Reference
+
+### PoolManager
+- [Reference](/docs/protocols/v4/reference/core/PoolManager)
+- Inherits: IPoolManager, ProtocolFees, NoDelegateCall, ERC6909Claims, Extsload, Exttload
+
+### Key Interfaces
+- [IPoolManager](/docs/protocols/v4/reference/core/interfaces/IPoolManager) — Core pool operations: initialize, swap, modifyLiquidity, donate
+- [IHooks](/docs/protocols/v4/reference/core/interfaces/IHooks) — Hook callback interface; permissions encoded in address bits
+- [IUnlockCallback](/docs/protocols/v4/reference/core/interfaces/IUnlockCallback) — Callback for the unlock pattern
+
+### Core Libraries
+- [StateLibrary](/docs/protocols/v4/reference/core/libraries/StateLibrary) — On-chain state reads via extsload
+- [TransientStateLibrary](/docs/protocols/v4/reference/core/libraries/TransientStateLibrary) — Transient storage reads for reserves, deltas, lock state
+- [Hooks](/docs/protocols/v4/reference/core/libraries/Hooks) — Permission flag encoding and hook invocation logic
+- [Pool](/docs/protocols/v4/reference/core/libraries/Pool) — All pool actions (swap, modifyLiquidity, etc.)
+- [Position](/docs/protocols/v4/reference/core/libraries/Position) — Position accounting (liquidity, fees)
+- [TickMath](/docs/protocols/v4/reference/core/libraries/TickMath) — Tick-to-sqrtPrice conversions (same as v3)
+- [SqrtPriceMath](/docs/protocols/v4/reference/core/libraries/SqrtPriceMath) — Price calculations with Q64.96 fixed-point
+- [FullMath](/docs/protocols/v4/reference/core/libraries/FullMath) — Overflow-safe multiplication and division
+- [LPFeeLibrary](/docs/protocols/v4/reference/core/libraries/LPFeeLibrary) — LP fee calculation helpers
+- [SwapMath](/docs/protocols/v4/reference/core/libraries/SwapMath) — Swap computation within a single tick range
+
+### Core Types
+- [PoolKey](/docs/protocols/v4/reference/core/types/PoolKey) — Struct identifying a pool: currency0, currency1, fee, tickSpacing, hooks
+- [PoolId](/docs/protocols/v4/reference/core/types/PoolId) — Hash of PoolKey, used as the pool identifier
+- [BalanceDelta](/docs/protocols/v4/reference/core/types/BalanceDelta) — Packed int256: upper 128 bits = amount0, lower 128 bits = amount1
+- [Currency](/docs/protocols/v4/reference/core/types/Currency) — Represents native ETH (address(0)) or an ERC-20 token
+- [Slot0](/docs/protocols/v4/reference/core/types/Slot0) — Packed pool state: sqrtPriceX96, tick, protocolFee, lpFee
+- [BeforeSwapDelta](/docs/protocols/v4/reference/core/types/BeforeSwapDelta) — Return value from beforeSwap hook
+
+### Custom Error Selectors
+- [Error Reference](/docs/protocols/v4/reference/errors/errors)
+- Common errors: `CurrencyNotSettled`, `PoolNotInitialized`, `ManagerLocked`, `CurrenciesOutOfOrderOrEqual`, `SwapAmountCannotBeZero`
+
+---
+
+## Periphery Contract Reference
+
+### PositionManager
+- [Reference](/docs/protocols/v4/reference/periphery/PositionManager)
+- Inherits: IPositionManager, ERC721Permit_v4, PoolInitializer_v4, Multicall_v4, DeltaResolver, ReentrancyLock, BaseActionsRouter, Notifier, Permit2Forwarder, NativeWrapper
+
+### V4Router
+- [Reference](/docs/protocols/v4/reference/periphery/V4Router)
+- Inherits: IV4Router, BaseActionsRouter, DeltaResolver
+
+### V4Quoter
+- [Reference](/docs/protocols/v4/reference/periphery/lens/V4Quoter)
+- On-chain quoting: simulates swaps without executing them
+
+### StateView
+- [Reference](/docs/protocols/v4/reference/periphery/lens/StateView)
+- View functions for reading pool state from off-chain
+
+### BaseHook
+- [Reference](/docs/protocols/v4/reference/periphery/utils/BaseHook)
+- Base contract for building hooks — provides default implementations and permission validation
+
+### Key Periphery Libraries
+- [Actions](/docs/protocols/v4/reference/periphery/libraries/Actions) — Action type definitions for the command pattern
+- [PathKey](/docs/protocols/v4/reference/periphery/libraries/PathKey) — Multi-hop swap path encoding
+- [PositionInfo](/docs/protocols/v4/reference/periphery/libraries/PositionInfoLibrary) — Packed position data: poolId, tickUpper, tickLower, hasSubscriber
+- [SlippageCheck](/docs/protocols/v4/reference/periphery/libraries/SlippageCheck) — Delta validation against slippage bounds
+- [CalldataDecoder](/docs/protocols/v4/reference/periphery/libraries/CalldataDecoder) — Decode batched command calldata
+- [LiquidityAmounts](/docs/protocols/v4/reference/periphery/libraries/LiquidityAmounts) — Compute liquidity from token amounts and prices
+
+---
+
+## Related Protocols
+
+### Universal Router
+- [Overview](/docs/protocols/universal-router/overview) · [Commands](/docs/protocols/universal-router/concepts/commands)
+- Executes v2, v3, and v4 swaps in one transaction via encoded commands.
+
+### Permit2
+- [Overview](/docs/protocols/permit2/overview) · [Allowance Transfer](/docs/protocols/permit2/concepts/allowance-transfer) · [Signature Transfer](/docs/protocols/permit2/concepts/signature-transfer)
+- Shared approval protocol. Approve Permit2 once, then sign permits for each protocol interaction.
+
+### Trading API
+- [Getting Started](/docs/trading/swapping-api/getting-started) · [Integration Guide](/docs/trading/swapping-api/integration-guide)
+- The recommended high-level way to execute swaps. Handles routing across v2/v3/v4 and UniswapX automatically.
+
+---
+
+## Official Links
+
+- Developer Portal: https://developers.uniswap.org
+- v4 Core Repo: https://github.com/Uniswap/v4-core
+- v4 Periphery Repo: https://github.com/Uniswap/v4-periphery
+- v4 Template: https://github.com/Uniswap/v4-template
+- Uniswap AI: https://github.com/Uniswap/uniswap-ai
+- App: https://app.uniswap.org

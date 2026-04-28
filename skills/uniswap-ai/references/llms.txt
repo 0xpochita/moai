@@ -1,0 +1,179 @@
+# Uniswap Developer Documentation — LLM Context
+
+> Source: https://developers.uniswap.org
+> Base URL for all doc links: https://developers.uniswap.org
+
+## About Uniswap
+
+Uniswap is a decentralized exchange protocol on Ethereum and EVM-compatible chains. It uses an automated market maker (AMM) model with liquidity pools instead of order books. The protocol is open-source, permissionless, and supports swapping ERC-20 tokens without intermediaries.
+
+---
+
+## Protocol Versions
+
+### Uniswap v4 (Latest)
+- Singleton `PoolManager` contract holds all pools — lower gas for creation and multi-hop swaps
+- **Hooks**: developer-defined contracts that run custom logic before/after swaps or liquidity events
+- Flash accounting: deltas are accumulated and settled at the end of a transaction
+- ERC-6909 for gas-efficient token claims
+- Dynamic fees via hooks
+- Subscribers for liquidity mining without transferring position ownership
+- [Overview](/docs/protocols/v4/overview) · [Concepts](/docs/protocols/v4/concepts) · [Guides](/docs/protocols/v4/guides) · [Deployments](/docs/protocols/v4/deployments)
+
+### Uniswap v3
+- Concentrated liquidity: LPs choose a price range, improving capital efficiency
+- Multiple fee tiers (0.01%, 0.05%, 0.3%, 1%)
+- NFT-based positions (ERC-721)
+- Built-in TWAP price oracle
+- [Overview](/docs/protocols/v3/overview) · [Concepts](/docs/protocols/v3/concepts) · [Guides](/docs/protocols/v3/guides) · [Deployments](/docs/protocols/v3/deployments)
+
+### Uniswap v2
+- Constant-product AMM (x·y = k)
+- Fixed full-range liquidity
+- Flash swaps
+- [Overview](/docs/protocols/v2/overview) · [Concepts](/docs/protocols/v2/concepts) · [Guides](/docs/protocols/v2/guides) · [Deployments](/docs/protocols/v2/deployments)
+
+---
+
+## Trading (Swap Integration)
+
+The Uniswap Trading API is the recommended way to integrate swaps. It handles routing, gas estimation, Permit2 approvals, and supports both AMM and UniswapX order types.
+
+- [Getting Started](/docs/trading/swapping-api/getting-started)
+- [Integration Guide](/docs/trading/swapping-api/integration-guide)
+- [Supported Chains](/docs/trading/swapping-api/supported-chains)
+- [Concepts: Permit2](/docs/trading/swapping-api/concepts/permit2) · [Swap Routing](/docs/trading/swapping-api/concepts/swap-routing)
+- [AMM vs UniswapX Routing](/docs/trading/swapping-api/amm-vs-uniswapx-routing)
+- [Code Examples](/docs/trading/swapping-api/swapping-code-examples)
+- [Common Errors](/docs/trading/swapping-api/common-errors) · [FAQs](/docs/trading/swapping-api/faqs)
+- [Custom Interface Links](/docs/trading/custom-interface-links)
+- [API Reference](/docs/api-reference)
+
+---
+
+## Liquidity
+
+### Liquidity Provisioning API
+- [Getting Started](/docs/liquidity/liquidity-provisioning-api/getting-started)
+- [Integration Guide](/docs/liquidity/liquidity-provisioning-api/integration-guide)
+
+### UniswapX
+Intent-based trading and filling infrastructure for gasless, MEV-protected swaps.
+- [Overview](/docs/liquidity/uniswapx/overview)
+- [Architecture](/docs/liquidity/uniswapx/concepts/architecture) · [Auction Types](/docs/liquidity/uniswapx/concepts/auction-types) · [UniswapRFQ](/docs/liquidity/uniswapx/concepts/uniswaprfq)
+- Filling: [Mainnet](/docs/liquidity/uniswapx/filling/mainnet) · [Arbitrum](/docs/liquidity/uniswapx/filling/arbitrum) · [Base & Unichain](/docs/liquidity/uniswapx/filling/priority-chain)
+- [Deployments](/docs/liquidity/uniswapx/deployments)
+
+### Liquidity Launchpad
+Configure and deploy custom liquidity auctions (CCA).
+- [Overview](/docs/liquidity/liquidity-launchpad/overview)
+- [Concepts](/docs/liquidity/liquidity-launchpad/concepts) · [Guides](/docs/liquidity/liquidity-launchpad/guides)
+- [Deployments](/docs/liquidity/liquidity-launchpad/deployments)
+
+---
+
+## Other Protocols
+
+### Smart Wallet
+Delegation, batched transactions, gas abstraction, and alternative signers.
+- [Overview](/docs/protocols/smart-wallet/overview) · [Concepts](/docs/protocols/smart-wallet/concepts) · [Guides](/docs/protocols/smart-wallet/guides) · [Deployments](/docs/protocols/smart-wallet/deployments)
+
+### The Compact
+Resource locks, compacts, allocators, arbiters, and periphery contracts.
+- [Overview](/docs/protocols/the-compact/overview) · [Concepts](/docs/protocols/the-compact/concepts)
+
+### Permit2
+Token approval management: allowance-based and signature-based transfers.
+- [Overview](/docs/protocols/permit2/overview) · [Allowance Transfer](/docs/protocols/permit2/concepts/allowance-transfer) · [Signature Transfer](/docs/protocols/permit2/concepts/signature-transfer)
+
+### Universal Router
+Flexible command-based router for executing multiple DeFi operations in a single transaction.
+- [Overview](/docs/protocols/universal-router/overview) · [Commands](/docs/protocols/universal-router/concepts/commands)
+
+### Protocol Fee
+On-chain protocol fee distribution.
+- [Overview](/docs/protocols/protocol-fee/overview) · [Concepts](/docs/protocols/protocol-fee/concepts) · [Guides](/docs/protocols/protocol-fee/guides) · [Deployments](/docs/protocols/protocol-fee/deployments)
+
+---
+
+## SDKs
+
+### v4 SDK (TypeScript)
+- [Overview](/docs/sdks/v4/overview)
+- Guides: [Quoting](/docs/sdks/v4/guides/swapping/quoting) · [Single-Hop Swap](/docs/sdks/v4/guides/swapping/single-hop-swapping) · [Multi-Hop Swap](/docs/sdks/v4/guides/swapping/multi-hop-swapping)
+- Liquidity: [Mint Position](/docs/sdks/v4/guides/managing-liquidity/position-minting) · [Fetch Position](/docs/sdks/v4/guides/managing-liquidity/position-fetching) · [Collect Fees](/docs/sdks/v4/guides/managing-liquidity/collect-fees) · [Modify Position](/docs/sdks/v4/guides/managing-liquidity/modifying-position)
+- [Create Pool](/docs/sdks/v4/guides/create-pool) · [Pool Data](/docs/sdks/v4/guides/pool-data)
+
+### v3 SDK (TypeScript)
+- [Overview](/docs/sdks/v3/overview)
+- Guides: [Quoting](/docs/sdks/v3/guides/swapping/quoting) · [Routing](/docs/sdks/v3/guides/swapping/routing) · [Swapping](/docs/sdks/v3/guides/swapping/swapping)
+- Liquidity: [Mint Position](/docs/sdks/v3/guides/managing-liquidity/position-minting) · [Modify Position](/docs/sdks/v3/guides/managing-liquidity/modifying-position) · [Collect Fees](/docs/sdks/v3/guides/managing-liquidity/collect-fees)
+- [Pool Data](/docs/sdks/v3/guides/pool-data) · [Price Oracle](/docs/sdks/v3/guides/price-oracle)
+
+### v2 SDK (TypeScript)
+- [Overview](/docs/sdks/v2/overview)
+- Guides: [Fetching Data](/docs/sdks/v2/guides/fetching-data) · [Pricing](/docs/sdks/v2/guides/pricing) · [Swapping](/docs/sdks/v2/guides/swapping)
+
+---
+
+## Unichain
+
+Unichain is an OP Stack L2 with sub-second blocks (Flashblocks), fair ordering, and MEV protection.
+
+- [Overview](/docs/unichain)
+- [Getting Started](/docs/unichain/getting-started) · [Network Info](/docs/unichain/technical-information/network-information)
+- [Flashblocks](/docs/unichain/technical-information/flashblocks)
+- [Contract Addresses](/docs/unichain/technical-information/contract-addresses)
+- Guides: [Deploy a Smart Contract](/docs/unichain/guides/deploy-a-smart-contract) · [Create a Pool](/docs/unichain/guides/create-a-pool) · [Routing on Unichain](/docs/unichain/guides/routing-on-unichain)
+- Tools: [Block Explorers](/docs/unichain/tools/block-explorers) · [Bridges](/docs/unichain/tools/bridges) · [Faucets](/docs/unichain/tools/faucets) · [Oracles](/docs/unichain/tools/oracles) · [Node Providers](/docs/unichain/tools/node-providers)
+
+---
+
+## Uniswap AI
+
+Open-source plugins and skills for coding agents, providing protocol-specific guidance for Uniswap APIs and smart contracts.
+
+- [Overview](/docs/uniswap-ai/overview) · [Skills](/docs/uniswap-ai/skills) · [Contributions](/docs/uniswap-ai/contributions)
+- GitHub: https://github.com/Uniswap/uniswap-ai
+
+---
+
+## Ecosystem
+
+### Builder Support
+- [Get Funded](/docs/ecosystem/builder-support/get-funded) · [Get Reach](/docs/ecosystem/builder-support/get-reach) · [Security Resources](/docs/ecosystem/builder-support/security-resources)
+
+### Governance
+- [Overview](/docs/ecosystem/governance/overview) · [Governance Process](/docs/ecosystem/governance/governance-process) · [Guide to Voting](/docs/ecosystem/governance/guide-to-voting)
+
+### Subgraphs (Data Indexing)
+- [Overview](/docs/ecosystem/subgraphs/overview) · [Using Subgraphs](/docs/ecosystem/subgraphs/guides/using-subgraphs)
+- Entity schemas and query examples for [v2](/docs/ecosystem/subgraphs/concepts/v2), [v3](/docs/ecosystem/subgraphs/concepts/v3), and [v4](/docs/ecosystem/subgraphs/concepts/v4)
+
+---
+
+## Core Concepts Quick Reference
+
+| Concept | Description |
+|---|---|
+| AMM | Automated Market Maker — trades execute against a liquidity pool, not an order book |
+| Concentrated Liquidity | LPs deploy capital within a custom price range (v3, v4) |
+| Hooks | Developer-defined smart contracts that execute before/after pool events (v4) |
+| Flash Accounting | Token deltas are tracked and settled at the end of a transaction (v4) |
+| PoolManager | Singleton contract that manages all v4 pools |
+| Permit2 | Shared token approval protocol that reduces individual approve transactions |
+| Universal Router | Multi-command router supporting v2, v3, v4, and Permit2 in one transaction |
+| UniswapX | Intent-based order protocol with off-chain signing and on-chain settlement |
+| Flashblocks | Sub-second block confirmations on Unichain (200 ms) |
+| ERC-6909 | Multi-token standard used in v4 for gas-efficient claims |
+
+---
+
+## Official Links
+
+- Protocol: https://uniswap.org
+- Developer Portal: https://developers.uniswap.org
+- App: https://app.uniswap.org
+- GitHub: https://github.com/Uniswap
+- Governance Forum: https://gov.uniswap.org
+- Discord: https://discord.gg/uniswap
