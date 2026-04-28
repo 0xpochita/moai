@@ -8,3 +8,8 @@ export { useHoldingsStore } from "./useHoldingsStore";
 export { useKeeperStore } from "./useKeeperStore";
 export { useMigrationStore } from "./useMigrationStore";
 export { selectTotals, usePositionsStore } from "./usePositionsStore";
+export {
+  ALL_TRUSTED_PROTOCOLS,
+  type ProtocolKey,
+  useSettingsStore,
+} from "./useSettingsStore";

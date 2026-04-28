@@ -1,3 +1,4 @@
+import { SettingsPanel } from "@/components/pages/(dashboard)/SettingsPanel";
 import { NavbarBrand } from "./NavbarBrand";
 import { NavbarLinks } from "./NavbarLinks";
 import { NavbarThemeToggle } from "./NavbarThemeToggle";
@@ -12,6 +13,7 @@ export function Navbar() {
           <NavbarLinks />
         </div>
         <div className="flex items-center gap-2 pr-1">
+          <SettingsPanel />
           <NavbarThemeToggle />
           <NavbarWallet />
         </div>
