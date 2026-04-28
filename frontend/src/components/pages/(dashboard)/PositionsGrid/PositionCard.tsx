@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import { Badge, TokenPairLogos } from "@/components/ui";
-import { explorerAddressUrl, formatPercent, formatUsd } from "@/lib";
+import { formatPercent, formatUsd } from "@/lib";
 import { useMigrationStore } from "@/store";
 import type { Position, PositionStatus } from "@/types";
 import { PositionActivity } from "./PositionActivity";
@@ -75,12 +75,12 @@ export function PositionCard({ position }: PositionCardProps) {
             value={formatAprRange(position.aprMin, position.aprMax)}
           />
           <a
-            href={explorerAddressUrl(position.network, position.poolAddress)}
+            href={`https://app.uniswap.org/positions/v4/base/${position.tokenId}`}
             target="_blank"
             rel="noopener noreferrer"
             className="text-brand hover:text-brand-hover mt-1 inline-flex items-center gap-1 text-[11px] font-medium tracking-tight"
           >
-            Contract
+            View position
             <ArrowUpRight className="h-3 w-3" aria-hidden />
           </a>
         </div>

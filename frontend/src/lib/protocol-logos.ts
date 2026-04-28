@@ -1,6 +1,9 @@
 const PROTOCOL_LOGOS: Record<string, string> = {
   morpho: "/Assets/Images/logo-defi/morpho-logo.webp",
   aave: "/Assets/Images/logo-defi/aave-logo.svg",
+  compound: "/Assets/Images/logo-defi/compound-logo.svg",
+  lido: "/Assets/Images/logo-defi/lido-logo.svg",
+  yearn: "/Assets/Images/logo-defi/yearn-logo.svg",
   euler: "/Assets/Images/logo-defi/euler-finance-logo.svg",
   "euler-finance": "/Assets/Images/logo-defi/euler-finance-logo.svg",
   ethena: "/Assets/Images/logo-defi/ethena-logo.jpg",
