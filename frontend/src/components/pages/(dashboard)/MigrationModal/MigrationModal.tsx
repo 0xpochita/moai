@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { useAccount, useWalletClient } from "wagmi";
 import {
   Badge,
+  MotionModal,
   ProtocolAvatar,
   Skeleton,
   TokenPairLogos,
@@ -52,28 +53,14 @@ export function MigrationModal() {
     }
   }, [status, plan?.intent, retryPositions, loadHoldings, address]);
 
-  if (!open) return null;
-
   const closing = status === "complete" ? dismiss : cancel;
   const ready = status === "ready" && plan !== null;
   const busy = status === "planning" || status === "executing";
   const isWithdraw = plan?.intent === "withdraw";
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Migrate position"
-      className="fixed inset-0 z-50 flex items-center justify-center px-4"
-    >
-      <button
-        type="button"
-        aria-label="Close migration modal"
-        onClick={closing}
-        className="bg-foreground/40 absolute inset-0 backdrop-blur-sm"
-      />
-
-      <div className="bg-surface ring-card relative flex w-full max-w-md flex-col gap-4 rounded-2xl p-5">
+    <MotionModal open={open} onClose={closing} ariaLabel="Migrate position">
+      <div className="bg-surface ring-card relative mx-auto flex w-full max-w-md flex-col gap-4 rounded-2xl p-5">
         <header className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2">
             <span className="bg-brand-soft text-brand inline-flex h-9 w-9 items-center justify-center rounded-2xl">
@@ -262,7 +249,7 @@ export function MigrationModal() {
           </div>
         )}
       </div>
-    </div>
+    </MotionModal>
   );
 }
 

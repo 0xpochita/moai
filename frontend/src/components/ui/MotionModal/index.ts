@@ -1,0 +1,1 @@
+export { MotionModal } from "./MotionModal";

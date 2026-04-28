@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { useWalletClient } from "wagmi";
 import { useShallow } from "zustand/react/shallow";
 import { RiskProfilePicker } from "@/components/pages/(dashboard)/SettingsPanel";
+import { MotionModal } from "@/components/ui";
 import {
   getGuardedHookAddress,
   shortAddress,
@@ -39,8 +40,6 @@ export function DelegationModal({ open, onClose }: DelegationModalProps) {
   const [step, setStep] = useState<"prepare" | "signing" | "active">(
     status === "delegated" ? "active" : "prepare",
   );
-
-  if (!open) return null;
 
   const eligibleCount = positions.filter((p) => p.status !== "closed").length;
 
@@ -79,20 +78,8 @@ export function DelegationModal({ open, onClose }: DelegationModalProps) {
   };
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Delegate to MOAI"
-      className="fixed inset-0 z-50 flex items-center justify-center px-4"
-    >
-      <button
-        type="button"
-        aria-label="Close delegation modal"
-        onClick={onClose}
-        className="bg-foreground/40 absolute inset-0 backdrop-blur-sm"
-      />
-
-      <div className="bg-surface ring-card relative flex max-h-[92vh] w-full max-w-md flex-col gap-4 overflow-y-auto rounded-2xl p-5">
+    <MotionModal open={open} onClose={onClose} ariaLabel="Delegate to MOAI">
+      <div className="bg-surface ring-card relative mx-auto flex max-h-[92vh] w-full max-w-md flex-col gap-4 overflow-y-auto rounded-2xl p-5">
         <header className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2">
             <span className="bg-brand-soft text-brand inline-flex h-9 w-9 items-center justify-center rounded-2xl">
@@ -220,7 +207,7 @@ export function DelegationModal({ open, onClose }: DelegationModalProps) {
           </div>
         )}
       </div>
-    </div>
+    </MotionModal>
   );
 }
 

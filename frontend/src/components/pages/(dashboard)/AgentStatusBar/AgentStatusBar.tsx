@@ -1,16 +1,9 @@
 "use client";
 
-import {
-  AlertTriangle,
-  Loader2,
-  Power,
-  Radio,
-  ShieldCheck,
-} from "lucide-react";
+import { Loader2, Power, Radio, ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useAccount, usePublicClient, useWalletClient } from "wagmi";
-import { useShallow } from "zustand/react/shallow";
 import { formatRelativeTime, revokeDelegation } from "@/lib";
 import {
   RISK_PROFILES,
@@ -74,7 +67,6 @@ export function AgentStatusBar() {
   if (!isConnected || !address) return null;
   if (delegationStatus !== "delegated") return null;
 
-  const autoExecute = meta?.autoExecuteEnabled ?? false;
   const lastTickAtSec = meta?.tickStats.lastTickAtSec ?? 0;
   const lastCheckedAtSec = subscription?.lastCheckedAtSec ?? 0;
   const isSubscribed = Boolean(subscription);
@@ -142,15 +134,6 @@ export function AgentStatusBar() {
                   {meta.tickStats.totalTicks === 1 ? "" : "s"}
                 </span>
               )}
-            </div>
-          )}
-          {isSubscribed && !autoExecute && (
-            <div className="text-warning mt-2 inline-flex items-start gap-1.5 text-[11px] leading-snug">
-              <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />
-              <span>
-                Keeper running in detect-only mode (auto-execute disabled).
-                Migrations require your signature.
-              </span>
             </div>
           )}
         </div>

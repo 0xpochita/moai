@@ -25,7 +25,6 @@ const POSITION_MANAGER_V4 = getAddress(
 const LIFI_DIAMOND = getAddress("0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae");
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as Address;
 const USDC_BASE = getAddress("0x833589fcd6edb6e08f4c7c32d4f71b54bda02913");
-const USDC_DECIMALS = 6;
 const BASE_CHAIN_ID = 8453;
 
 const STABLECOIN_SYMBOLS = new Set(["USDC", "USDT", "DAI", "USDBC", "PYUSD"]);

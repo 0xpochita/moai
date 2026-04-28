@@ -31,10 +31,10 @@ export function RiskProfilePicker({ variant = "stacked" }: Props) {
             type="button"
             onClick={() => setValue(key)}
             aria-pressed={active}
-            className={`flex flex-col gap-1 rounded-xl px-3 py-2.5 text-left transition-colors ${
+            className={`flex flex-col gap-1 rounded-xl px-3 py-2.5 text-left transition-colors ring-1 ${
               active
-                ? "bg-brand-soft text-brand ring-1 ring-brand"
-                : "bg-surface text-muted ring-soft hover:text-main"
+                ? "bg-brand-soft text-brand ring-brand"
+                : "bg-elevated text-muted ring-transparent hover:bg-brand-soft/40 hover:text-main hover:ring-brand-soft"
             }`}
           >
             <div className="flex items-center gap-2">
