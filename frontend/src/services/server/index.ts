@@ -26,5 +26,15 @@ export { buildMigrationPlan } from "./migration-planner";
 export { mockPositions } from "./positions-mock";
 export { fetchPositionsOnChain } from "./positions-onchain";
 export { fetchPositionsForOwner } from "./positions-subgraph";
+export {
+  type ApprovalCalldata,
+  type CheckApprovalResponse,
+  type ClassicQuote,
+  checkUniswapApproval,
+  fetchUniswapQuote,
+  fetchUniswapSwap,
+  type QuoteRequest,
+  type SwapResponse,
+} from "./uniswap-trade";
 export { fetchV4PoolStats, type PoolStats } from "./uniswap-v4-stats";
 export { buildWithdrawalPlan } from "./withdrawal-planner";

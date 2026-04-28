@@ -1,5 +1,10 @@
 import { type Address, getAddress } from "viem";
-import type { DestinationVault, MigrationPlan, Position } from "@/types";
+import type {
+  DestinationVault,
+  MigrationLeg,
+  MigrationPlan,
+  Position,
+} from "@/types";
 import {
   APPROVE_MAX,
   encodeApproveCalldata,
@@ -8,12 +13,20 @@ import {
 import { fetchComposerQuote } from "./lifi-composer";
 import { fetchVaults } from "./lifi-earn";
 import { fetchPositionsOnChain } from "./positions-onchain";
+import {
+  checkUniswapApproval,
+  fetchUniswapQuote,
+  fetchUniswapSwap,
+} from "./uniswap-trade";
 
 const POSITION_MANAGER_V4 = getAddress(
   "0x7c5f5a4bbd8fd63184577525326123b519429bdc",
 );
 const LIFI_DIAMOND = getAddress("0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae");
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as Address;
+const USDC_BASE = getAddress("0x833589fcd6edb6e08f4c7c32d4f71b54bda02913");
+const USDC_DECIMALS = 6;
+const BASE_CHAIN_ID = 8453;
 
 const STABLECOIN_SYMBOLS = new Set(["USDC", "USDT", "DAI", "USDBC", "PYUSD"]);
 
@@ -58,6 +71,94 @@ async function pickBestVault(
 
 function isStableSymbol(symbol: string): boolean {
   return STABLECOIN_SYMBOLS.has(symbol.toUpperCase());
+}
+
+function symbolDecimals(position: Position, symbol: string): number {
+  if (position.token0.symbol.toUpperCase() === symbol.toUpperCase()) {
+    return position.token0.decimals;
+  }
+  if (position.token1.symbol.toUpperCase() === symbol.toUpperCase()) {
+    return position.token1.decimals;
+  }
+  return 18;
+}
+
+function humanUsdToAtomic(valueUsd: number, decimals: number): bigint {
+  if (valueUsd <= 0) return 10n ** BigInt(decimals);
+  const scaled = Math.floor(valueUsd * 10 ** Math.min(decimals, 6));
+  if (decimals <= 6) return BigInt(scaled);
+  return BigInt(scaled) * 10n ** BigInt(decimals - 6);
+}
+
+interface UniswapSwapLegsResult {
+  legs: MigrationLeg[];
+  minAmountOut: bigint;
+}
+
+async function buildUniswapSwapLegs(args: {
+  owner: Address;
+  tokenIn: Address;
+  tokenInSymbol: string;
+  amountIn: bigint;
+  signal?: AbortSignal;
+}): Promise<UniswapSwapLegsResult> {
+  const { owner, tokenIn, tokenInSymbol, amountIn, signal } = args;
+
+  const approval = await checkUniswapApproval(
+    {
+      walletAddress: owner,
+      token: tokenIn,
+      amount: amountIn.toString(),
+      chainId: BASE_CHAIN_ID,
+    },
+    signal,
+  );
+
+  const quote = await fetchUniswapQuote(
+    {
+      swapper: owner,
+      tokenIn,
+      tokenOut: USDC_BASE,
+      tokenInChainId: BASE_CHAIN_ID,
+      tokenOutChainId: BASE_CHAIN_ID,
+      amount: amountIn.toString(),
+      type: "EXACT_INPUT",
+      slippageTolerance: 0.5,
+      routingPreference: "CLASSIC",
+      protocols: ["V3", "V4"],
+    },
+    signal,
+  );
+
+  const swapTx = await fetchUniswapSwap(quote, signal);
+
+  const legs: MigrationLeg[] = [];
+
+  if (approval.approval) {
+    legs.push({
+      kind: "swap",
+      target: `${tokenInSymbol} (Permit2 approve)`,
+      targetAddress: getAddress(approval.approval.to),
+      description: `Approve Permit2 to pull ${tokenInSymbol} for the Uniswap swap.`,
+      calldata: approval.approval.data,
+      value: approval.approval.value ?? "0",
+    });
+  }
+
+  legs.push({
+    kind: "swap",
+    target: "Uniswap Universal Router",
+    targetAddress: getAddress(swapTx.swap.to),
+    description: `Swap ${tokenInSymbol} → USDC via Uniswap Trading API (CLASSIC route).`,
+    calldata: swapTx.swap.data,
+    value: swapTx.swap.value ?? "0",
+  });
+
+  const outAmount = BigInt(quote.quote.output.amount);
+  const slippageBps = BigInt(Math.floor((quote.quote.slippage ?? 0.5) * 100));
+  const minAmountOut = (outAmount * (10000n - slippageBps)) / 10000n;
+
+  return { legs, minAmountOut };
 }
 
 function pickPostBurnInputToken(
@@ -142,9 +243,36 @@ export async function buildMigrationPlan(
   });
 
   const inputToken = pickPostBurnInputToken(position, desiredStable);
+  const inputDecimals = symbolDecimals(position, inputToken.symbol);
   const vaultAddress = getAddress(destination.address);
-  const fromAmount =
-    valueUsd > 0 ? BigInt(Math.floor(valueUsd * 10 ** 6)) : 1_000_000n;
+  const inputAmount = humanUsdToAtomic(valueUsd, inputDecimals);
+  const isInputUsdc = !inputToken.isNative && inputToken.symbol === "USDC";
+
+  const swapLegs: MigrationLeg[] = [];
+  let depositFromAmount = inputAmount;
+  let depositFromToken: Address = inputToken.address;
+  let depositFromSymbol = inputToken.symbol;
+
+  if (!isInputUsdc && !inputToken.isNative) {
+    try {
+      const tradingApiLegs = await buildUniswapSwapLegs({
+        owner,
+        tokenIn: inputToken.address,
+        tokenInSymbol: inputToken.symbol,
+        amountIn: inputAmount,
+        signal,
+      });
+      swapLegs.push(...tradingApiLegs.legs);
+      depositFromAmount = tradingApiLegs.minAmountOut;
+      depositFromToken = USDC_BASE;
+      depositFromSymbol = "USDC";
+    } catch (err) {
+      console.warn(
+        "[migration-planner] uniswap trading api failed; falling back to composer-only path:",
+        err,
+      );
+    }
+  }
 
   const approveCalldata = inputToken.isNative
     ? null
@@ -156,11 +284,11 @@ export async function buildMigrationPlan(
   try {
     const quote = await fetchComposerQuote(
       {
-        fromChain: 8453,
-        toChain: 8453,
-        fromToken: inputToken.address,
+        fromChain: BASE_CHAIN_ID,
+        toChain: BASE_CHAIN_ID,
+        fromToken: depositFromToken,
         toToken: vaultAddress,
-        fromAmount: fromAmount.toString(),
+        fromAmount: depositFromAmount.toString(),
         fromAddress: owner,
         slippage: 0.005,
       },
@@ -207,14 +335,15 @@ export async function buildMigrationPlan(
         calldata: burnCalldata,
         value: "0",
       },
+      ...swapLegs,
       ...(approveCalldata
         ? [
             {
               kind: "swap" as const,
-              target: `${inputToken.symbol} (ERC20)`,
-              targetAddress: inputToken.address,
-              description: `Approve Li.Fi router to pull ${inputToken.symbol} from your wallet.`,
-              calldata: approveCalldata,
+              target: `${depositFromSymbol} (ERC20)`,
+              targetAddress: depositFromToken,
+              description: `Approve Li.Fi router to pull ${depositFromSymbol} from your wallet.`,
+              calldata: encodeApproveCalldata(LIFI_DIAMOND, APPROVE_MAX),
               value: "0",
             },
           ]
@@ -224,8 +353,8 @@ export async function buildMigrationPlan(
         target: "Li.Fi Composer",
         targetAddress: composerTo,
         description: composerCalldata
-          ? `Deposit ${inputToken.symbol} into ${destination.protocolName} ${destination.name} (${apyPercent.toFixed(2)}% APY) via Li.Fi Composer.`
-          : `Deposit ${inputToken.symbol} into ${destination.protocolName} ${destination.name} (composer call will be re-fetched at execute time).`,
+          ? `Deposit ${depositFromSymbol} into ${destination.protocolName} ${destination.name} (${apyPercent.toFixed(2)}% APY) via Li.Fi Composer.`
+          : `Deposit ${depositFromSymbol} into ${destination.protocolName} ${destination.name} (composer call will be re-fetched at execute time).`,
         calldata: composerCalldata ?? undefined,
         value: composerValue,
       },
