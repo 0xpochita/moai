@@ -98,11 +98,16 @@ function toPortfolio(raw: RawPortfolioPosition): PortfolioPosition {
   const underlying = raw.vault.underlyingTokens[0];
   return {
     vaultId: raw.vault.slug,
+    vaultAddress: raw.vault.address,
+    chainId: raw.vault.chainId,
     vaultName: raw.vault.name,
     protocolName: raw.vault.protocol.name,
     protocolUrl: raw.vault.protocol.url,
+    underlyingTokenAddress: underlying?.address ?? "",
     underlyingTokenSymbol: underlying?.symbol ?? "?",
+    underlyingTokenDecimals: underlying?.decimals ?? 18,
     shares: raw.shares,
+    underlyingBalance: raw.underlyingBalance,
     underlyingBalanceUsd: Number(raw.underlyingBalanceUsd) || 0,
     apyTotal: raw.vault.analytics.apy.total ?? 0,
     pnlUsd: raw.pnlUsd ? Number(raw.pnlUsd) : 0,

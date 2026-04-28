@@ -1,0 +1,1 @@
+export { VaultHoldings } from "./VaultHoldings";

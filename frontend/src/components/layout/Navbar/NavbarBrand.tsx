@@ -8,6 +8,7 @@ export function NavbarBrand() {
         width={35}
         height={35}
         alt="logo"
+        className="rounded-full"
       />
     </div>
   );

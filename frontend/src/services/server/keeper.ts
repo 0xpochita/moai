@@ -16,6 +16,7 @@ import {
   setCooldown,
   updateSubscription,
 } from "./keeper-store";
+import { fetchPortfolio, fetchVaults } from "./lifi-earn";
 import { buildMigrationPlan } from "./migration-planner";
 import { fetchPositionsOnChain } from "./positions-onchain";
 
@@ -48,12 +49,17 @@ interface MigrationOutcome {
     | "no-plan"
     | "submitted"
     | "logged"
+    | "rotation-suggested"
     | "error";
   positionTokenId?: string;
   txHash?: Hex;
   destination?: string;
   reason?: string;
 }
+
+const ROTATION_APY_DELTA_PCT = Number(
+  process.env.KEEPER_ROTATION_APY_DELTA_PCT ?? "0.5",
+);
 
 function getKeeperWallet() {
   const pk = process.env.KEEPER_PRIVATE_KEY;
@@ -99,6 +105,54 @@ function makeAction(args: {
   };
 }
 
+async function detectRotations(
+  ownerAddress: string,
+): Promise<MigrationOutcome[]> {
+  const holdings = await fetchPortfolio(ownerAddress).catch(() => []);
+  if (holdings.length === 0) return [];
+
+  const outcomes: MigrationOutcome[] = [];
+  for (const h of holdings) {
+    const cooldownKey = `rotate:${h.vaultAddress.toLowerCase()}`;
+    if (isCoolingDown(ownerAddress, cooldownKey)) continue;
+
+    const topVaults = await fetchVaults({
+      chainId: 8453,
+      asset: h.underlyingTokenSymbol,
+      sortBy: "apy",
+      limit: 5,
+      trustedOnly: true,
+      minTvlUsd: 500_000,
+    }).catch(() => []);
+
+    const better = topVaults.find(
+      (v) =>
+        v.address.toLowerCase() !== h.vaultAddress.toLowerCase() &&
+        v.apyTotal - h.apyTotal >= ROTATION_APY_DELTA_PCT,
+    );
+    if (!better) continue;
+
+    const destination = `${better.protocolName} ${better.name}`;
+    recordActivity(
+      ownerAddress,
+      makeAction({
+        ownerAddress,
+        type: "migrate",
+        title: "Rotation suggested",
+        description: `${h.vaultName} (${h.apyTotal.toFixed(2)}%) → ${destination} (${better.apyTotal.toFixed(2)}%) — open Withdraw to act.`,
+        destination,
+      }),
+    );
+    setCooldown(ownerAddress, cooldownKey, Math.floor(Date.now() / 1000));
+    outcomes.push({
+      type: "rotation-suggested",
+      destination,
+      reason: `apy delta ${(better.apyTotal - h.apyTotal).toFixed(2)}%`,
+    });
+  }
+  return outcomes;
+}
+
 async function processSubscription(
   ownerAddress: string,
 ): Promise<MigrationOutcome[]> {
@@ -108,11 +162,13 @@ async function processSubscription(
   });
 
   const oor = positions.filter((p) => p.status === "out-of-range");
+  const outcomesAcc: MigrationOutcome[] = [];
   if (oor.length === 0) {
-    return [{ type: "no-action" }];
+    const rot = await detectRotations(ownerAddress);
+    return rot.length > 0 ? rot : [{ type: "no-action" }];
   }
 
-  const outcomes: MigrationOutcome[] = [];
+  const outcomes: MigrationOutcome[] = outcomesAcc;
   for (const position of oor) {
     if (isCoolingDown(ownerAddress, position.tokenId)) {
       outcomes.push({
@@ -217,6 +273,9 @@ async function processSubscription(
       });
     }
   }
+
+  const rotations = await detectRotations(ownerAddress);
+  outcomes.push(...rotations);
 
   return outcomes;
 }

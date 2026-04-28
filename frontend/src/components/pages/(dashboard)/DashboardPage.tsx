@@ -9,6 +9,7 @@ import { DelegationBanner } from "./DelegationBanner";
 import { DestinationsPanel } from "./DestinationsPanel";
 import { MigrationModal } from "./MigrationModal";
 import { PositionsGrid, PositionsHeader } from "./PositionsGrid";
+import { VaultHoldings } from "./VaultHoldings";
 
 export function DashboardPage() {
   const { address, isConnected } = useAccount();
@@ -40,6 +41,7 @@ export function DashboardPage() {
       <AutopilotToggle />
       <PositionsHeader />
       <PositionsGrid walletConnected={isConnected} />
+      <VaultHoldings />
       <DestinationsPanel />
       <MigrationModal />
     </main>

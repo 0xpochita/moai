@@ -12,5 +12,5 @@ export {
   subscribeKeeper,
   unsubscribeKeeper,
 } from "./keeper";
-export { fetchMigrationPlan } from "./migration";
+export { fetchMigrationPlan, fetchWithdrawalPlan } from "./migration";
 export { fetchPositions } from "./positions";

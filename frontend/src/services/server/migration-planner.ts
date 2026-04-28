@@ -157,6 +157,7 @@ export async function buildMigrationPlan(
   }
 
   return {
+    intent: "migrate",
     positionTokenId: position.tokenId,
     positionId: position.id,
     source: {

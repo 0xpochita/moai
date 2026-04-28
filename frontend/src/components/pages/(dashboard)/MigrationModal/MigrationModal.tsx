@@ -3,10 +3,14 @@
 import { CheckCircle2, Loader2, ShieldCheck, X } from "lucide-react";
 import { useEffect } from "react";
 import { toast } from "sonner";
-import { useWalletClient } from "wagmi";
+import { useAccount, useWalletClient } from "wagmi";
 import { Badge, Skeleton } from "@/components/ui";
 import { formatPercent, formatProtocolName, formatUsd } from "@/lib";
-import { useMigrationStore, usePositionsStore } from "@/store";
+import {
+  useHoldingsStore,
+  useMigrationStore,
+  usePositionsStore,
+} from "@/store";
 import { MigrationLegItem } from "./MigrationLegItem";
 
 const BASE_CHAIN_ID = 8453;
@@ -21,6 +25,8 @@ export function MigrationModal() {
   const execute = useMigrationStore((s) => s.execute);
   const dismiss = useMigrationStore((s) => s.dismiss);
   const retryPositions = usePositionsStore((s) => s.retry);
+  const loadHoldings = useHoldingsStore((s) => s.load);
+  const { address } = useAccount();
 
   const handleExecute = () => {
     void execute({ walletClient: walletClient ?? null });
@@ -28,18 +34,25 @@ export function MigrationModal() {
 
   useEffect(() => {
     if (status === "complete") {
-      toast("Migration submitted", {
-        description: "Activity log updated. Refreshing positions…",
-      });
+      toast(
+        plan?.intent === "withdraw"
+          ? "Withdrawal submitted"
+          : "Migration submitted",
+        {
+          description: "Activity log updated. Refreshing positions…",
+        },
+      );
       void retryPositions();
+      if (address) void loadHoldings(address);
     }
-  }, [status, retryPositions]);
+  }, [status, plan?.intent, retryPositions, loadHoldings, address]);
 
   if (!open) return null;
 
   const closing = status === "complete" ? dismiss : cancel;
   const ready = status === "ready" && plan !== null;
   const busy = status === "planning" || status === "executing";
+  const isWithdraw = plan?.intent === "withdraw";
 
   return (
     <div
@@ -63,10 +76,12 @@ export function MigrationModal() {
             </span>
             <div>
               <div className="text-muted text-[10px] font-medium tracking-wide uppercase">
-                Migration plan
+                {isWithdraw ? "Withdrawal plan" : "Migration plan"}
               </div>
               <div className="text-main text-base font-semibold tracking-tight">
-                Move out-of-range position
+                {isWithdraw
+                  ? "Redeem vault to wallet"
+                  : "Move out-of-range position"}
               </div>
             </div>
           </div>
@@ -105,15 +120,20 @@ export function MigrationModal() {
                   {plan.source.pair}
                 </div>
                 <div className="text-muted truncate text-[10px]">
-                  Uniswap {plan.source.protocol} ·{" "}
-                  {formatPercent(plan.source.feeTier, 2)} · {plan.source.chain}
+                  {isWithdraw
+                    ? `Vault on ${plan.source.chain}`
+                    : `Uniswap ${plan.source.protocol} · ${formatPercent(plan.source.feeTier, 2)} · ${plan.source.chain}`}
                 </div>
               </div>
               <div className="text-right">
                 <div className="text-main text-sm font-semibold tracking-tight">
                   {formatUsd(plan.source.valueUsd)}
                 </div>
-                <Badge tone="warning">Out of range</Badge>
+                {isWithdraw ? (
+                  <Badge tone="outline">Holding</Badge>
+                ) : (
+                  <Badge tone="warning">Out of range</Badge>
+                )}
               </div>
             </section>
 
@@ -131,10 +151,21 @@ export function MigrationModal() {
                 </div>
               </div>
               <div className="text-right">
-                <div className="text-success text-sm font-semibold tracking-tight">
-                  {formatPercent(plan.yield.apyPercent, 2)}
-                </div>
-                <div className="text-muted text-[10px]">APY</div>
+                {isWithdraw ? (
+                  <>
+                    <div className="text-main text-sm font-semibold tracking-tight">
+                      {plan.destination.underlyingTokenSymbol}
+                    </div>
+                    <div className="text-muted text-[10px]">to wallet</div>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-success text-sm font-semibold tracking-tight">
+                      {formatPercent(plan.yield.apyPercent, 2)}
+                    </div>
+                    <div className="text-muted text-[10px]">APY</div>
+                  </>
+                )}
               </div>
             </section>
 
@@ -153,21 +184,23 @@ export function MigrationModal() {
               </ul>
             </section>
 
-            <section className="grid grid-cols-3 gap-2">
-              <YieldStat
-                label="/ day"
-                value={formatUsd(plan.yield.perDayUsd)}
-              />
-              <YieldStat
-                label="/ month"
-                value={formatUsd(plan.yield.perMonthUsd)}
-              />
-              <YieldStat
-                label="/ year"
-                value={formatUsd(plan.yield.perYearUsd)}
-                accent
-              />
-            </section>
+            {!isWithdraw && (
+              <section className="grid grid-cols-3 gap-2">
+                <YieldStat
+                  label="/ day"
+                  value={formatUsd(plan.yield.perDayUsd)}
+                />
+                <YieldStat
+                  label="/ month"
+                  value={formatUsd(plan.yield.perMonthUsd)}
+                />
+                <YieldStat
+                  label="/ year"
+                  value={formatUsd(plan.yield.perYearUsd)}
+                  accent
+                />
+              </section>
+            )}
           </>
         )}
 
@@ -181,12 +214,12 @@ export function MigrationModal() {
             {status === "executing" ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                Migrating…
+                {isWithdraw ? "Withdrawing…" : "Migrating…"}
               </>
             ) : (
               <>
                 <ShieldCheck className="h-4 w-4" aria-hidden />
-                Sign &amp; migrate
+                {isWithdraw ? "Sign & withdraw" : "Sign & migrate"}
               </>
             )}
           </button>
@@ -195,7 +228,7 @@ export function MigrationModal() {
         {status === "complete" && (
           <div className="bg-success-soft text-success flex items-center justify-center gap-2 rounded-full py-3 text-sm font-semibold tracking-tight">
             <CheckCircle2 className="h-4 w-4" aria-hidden />
-            Migration submitted
+            {isWithdraw ? "Withdrawal submitted" : "Migration submitted"}
           </div>
         )}
       </div>

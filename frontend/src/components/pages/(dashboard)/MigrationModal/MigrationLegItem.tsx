@@ -1,18 +1,25 @@
 "use client";
 
-import { ArrowDownToLine, ArrowRightLeft, Flame } from "lucide-react";
+import {
+  ArrowDownToLine,
+  ArrowRightLeft,
+  ArrowUpFromLine,
+  Flame,
+} from "lucide-react";
 import type { MigrationLeg, MigrationLegKind } from "@/types";
 
 const ICON_MAP: Record<MigrationLegKind, typeof Flame> = {
   burn: Flame,
   swap: ArrowRightLeft,
   deposit: ArrowDownToLine,
+  withdraw: ArrowUpFromLine,
 };
 
 const LABEL_MAP: Record<MigrationLegKind, string> = {
   burn: "Burn LP",
   swap: "Swap",
   deposit: "Deposit",
+  withdraw: "Redeem",
 };
 
 type MigrationLegItemProps = {

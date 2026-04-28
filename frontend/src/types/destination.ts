@@ -19,11 +19,16 @@ export interface DestinationVault {
 
 export interface PortfolioPosition {
   vaultId: string;
+  vaultAddress: string;
+  chainId: number;
   vaultName: string;
   protocolName: string;
   protocolUrl: string;
+  underlyingTokenAddress: string;
   underlyingTokenSymbol: string;
+  underlyingTokenDecimals: number;
   shares: string;
+  underlyingBalance: string;
   underlyingBalanceUsd: number;
   apyTotal: number;
   pnlUsd: number;

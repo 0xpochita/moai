@@ -1,7 +1,9 @@
 import type { DestinationVault } from "./destination";
 import type { Position } from "./position";
 
-export type MigrationLegKind = "burn" | "swap" | "deposit";
+export type MigrationIntent = "migrate" | "withdraw";
+
+export type MigrationLegKind = "burn" | "swap" | "deposit" | "withdraw";
 
 export interface MigrationLeg {
   kind: MigrationLegKind;
@@ -20,6 +22,7 @@ export interface MigrationYield {
 }
 
 export interface MigrationPlan {
+  intent: MigrationIntent;
   positionTokenId: string;
   positionId: string;
   source: {

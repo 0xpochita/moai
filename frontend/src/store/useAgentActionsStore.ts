@@ -10,6 +10,7 @@ interface AgentActionsState {
     txHash?: string,
   ) => void;
   recordDelegation: (delegateAddress: string) => void;
+  recordWithdrawal: (vaultLabel: string, txHash?: string) => void;
   setRemoteActions: (actions: AgentAction[]) => void;
   reset: () => void;
 }
@@ -93,6 +94,18 @@ export const useAgentActionsStore = create<AgentActionsState>((set) => ({
         type: "delegation",
         title: "Delegation",
         description: `Delegation set up for ${delegateAddress.slice(0, 10)}…`,
+        createdAtSec: NOW(),
+      };
+      return { actions: [action, ...state.actions].slice(0, 50) };
+    }),
+  recordWithdrawal: (vaultLabel, txHash) =>
+    set((state) => {
+      const action: AgentAction = {
+        id: `${Date.now()}-exit`,
+        type: "exit",
+        title: "Withdraw",
+        description: `Redeemed ${vaultLabel} → wallet`,
+        txHash,
         createdAtSec: NOW(),
       };
       return { actions: [action, ...state.actions].slice(0, 50) };
