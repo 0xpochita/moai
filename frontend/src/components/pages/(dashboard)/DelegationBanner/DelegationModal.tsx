@@ -18,7 +18,7 @@ import {
   shortAddress,
   submitSelfDelegationTx,
 } from "@/lib";
-import { useDelegationStore, usePositionsStore } from "@/store";
+import { useDelegationStore, useKeeperStore, usePositionsStore } from "@/store";
 
 const BASE_CHAIN_ID = 8453;
 const EXPIRY_DAYS = 30;
@@ -33,6 +33,7 @@ export function DelegationModal({ open, onClose }: DelegationModalProps) {
   const status = useDelegationStore((s) => s.status);
   const markDelegated = useDelegationStore((s) => s.markDelegated);
   const positions = usePositionsStore(useShallow((s) => s.positions));
+  const enableKeeper = useKeeperStore((s) => s.enable);
 
   const hookAddress = getGuardedHookAddress();
   const [step, setStep] = useState<"prepare" | "signing" | "active">(
@@ -62,6 +63,12 @@ export function DelegationModal({ open, onClose }: DelegationModalProps) {
       toast("Delegation submitted", {
         description: `Tx ${shortAddress(txHash)} on Base.`,
       });
+      const ownerAddr = walletClient.account?.address;
+      if (ownerAddr) {
+        void enableKeeper(ownerAddr).catch(() => {
+          // keeper may be offline / not configured; agent still works manually
+        });
+      }
       setStep("active");
     } catch (err) {
       const message =
