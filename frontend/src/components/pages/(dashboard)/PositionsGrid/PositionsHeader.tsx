@@ -4,12 +4,15 @@ import { ArrowUpRight, Plus } from "lucide-react";
 import Image from "next/image";
 import { useShallow } from "zustand/react/shallow";
 import { formatUsd } from "@/lib";
-import { selectTotals, usePositionsStore } from "@/store";
+import { selectTotals, useHoldingsStore, usePositionsStore } from "@/store";
 
 const CREATE_V4_URL = "https://app.uniswap.org/positions/create/v4";
 
 export function PositionsHeader() {
   const totals = usePositionsStore(useShallow(selectTotals));
+  const earnPositionsUsd = useHoldingsStore((s) =>
+    s.positions.reduce((sum, p) => sum + p.underlyingBalanceUsd, 0),
+  );
 
   return (
     <header className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
@@ -29,11 +32,30 @@ export function PositionsHeader() {
       </div>
       <div className="flex items-center gap-4 md:gap-6">
         <Stat
-          label="Yield / day"
-          value={formatUsd(totals.totalYieldDayUsd)}
+          label="Your Li.Fi Earn"
+          labelLogo={{
+            src: "/Assets/Images/logo-brand/lifi_brand_assets/PNG/logo_lifi_light_horizontal.png",
+            alt: "Li.Fi",
+            width: 36,
+            height: 12,
+          }}
+          value={formatUsd(earnPositionsUsd)}
           accent
+          icon="/Assets/Images/logo-coin/usdc-logo.svg"
+          iconAlt="USDC"
         />
-        <Stat label="Total value" value={formatUsd(totals.totalValueUsd)} />
+        <Stat
+          label="Your Uniswap Position"
+          labelLogo={{
+            src: "/Assets/Images/logo-defi/uniswap-logo.svg",
+            alt: "Uniswap",
+            width: 12,
+            height: 13,
+          }}
+          value={formatUsd(totals.totalValueUsd)}
+          icon="/Assets/Images/logo-coin/usdc-logo.svg"
+          iconAlt="USDC"
+        />
         <a
           href={CREATE_V4_URL}
           target="_blank"
@@ -54,23 +76,56 @@ export function PositionsHeader() {
   );
 }
 
+type StatLabelLogo = {
+  src: string;
+  alt: string;
+  width: number;
+  height: number;
+};
+
 function Stat({
   label,
+  labelLogo,
   value,
   accent = false,
+  icon,
+  iconAlt,
 }: {
-  label: string;
+  label?: string;
+  labelLogo?: StatLabelLogo;
   value: string;
   accent?: boolean;
+  icon?: string;
+  iconAlt?: string;
 }) {
   return (
-    <div className="text-right">
-      <div className="text-muted text-[10px] font-medium tracking-wide uppercase">
+    <div className="flex flex-col items-end gap-1">
+      <div className="text-muted flex items-center gap-1.5 text-[10px] font-medium tracking-wide uppercase">
+        {labelLogo && (
+          <Image
+            src={labelLogo.src}
+            alt={labelLogo.alt}
+            width={labelLogo.width}
+            height={labelLogo.height}
+            className="shrink-0 object-contain"
+            unoptimized
+          />
+        )}
         {label}
       </div>
       <div
-        className={`text-base font-semibold tracking-tight ${accent ? "text-brand" : "text-main"}`}
+        className={`flex items-center justify-end gap-1.5 text-base font-semibold tracking-tight ${accent ? "text-brand" : "text-main"}`}
       >
+        {icon && (
+          <Image
+            src={icon}
+            alt={iconAlt ?? ""}
+            width={18}
+            height={18}
+            className="h-4.5 w-4.5 shrink-0"
+            unoptimized
+          />
+        )}
         {value}
       </div>
     </div>

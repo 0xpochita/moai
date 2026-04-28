@@ -229,12 +229,6 @@ export function AgentStatusBar() {
               {lastTickAtSec > 0 && (
                 <span>Last tick {formatRelativeTime(lastTickAtSec)}</span>
               )}
-              {meta && (
-                <span>
-                  {meta.tickStats.totalTicks} tick
-                  {meta.tickStats.totalTicks === 1 ? "" : "s"}
-                </span>
-              )}
             </div>
           )}
         </div>
