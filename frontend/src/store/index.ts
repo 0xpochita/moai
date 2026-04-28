@@ -14,4 +14,5 @@ export {
   type RiskProfile,
   useSettingsStore,
 } from "./useSettingsStore";
+export { type Theme, useThemeStore } from "./useThemeStore";
 export { useUiStore } from "./useUiStore";

@@ -89,7 +89,7 @@ export function PositionActivity({ position }: PositionActivityProps) {
         )}
       </header>
 
-      <div className="bg-brand-soft/40 ring-soft flex items-center gap-2.5 rounded-xl px-3 py-2.5 ring-1">
+      <div className="bg-brand-soft/40 dark:bg-white/5 ring-soft flex items-center gap-2.5 rounded-xl px-3 py-2.5 ring-1">
         <span className="bg-brand text-white inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full">
           <Sparkles className="h-3 w-3" aria-hidden />
         </span>

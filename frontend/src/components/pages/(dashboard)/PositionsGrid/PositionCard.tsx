@@ -86,7 +86,7 @@ export function PositionCard({ position }: PositionCardProps) {
         </div>
       </div>
 
-      <div className="bg-brand-soft/50 flex items-center justify-between gap-3 rounded-xl px-4 py-3">
+      <div className="bg-brand-soft/50 dark:bg-white/5 dark:ring-1 dark:ring-(--color-border-soft) flex items-center justify-between gap-3 rounded-xl px-4 py-3">
         <div>
           <div className="text-muted text-[11px] font-medium tracking-wide uppercase">
             Your position

@@ -196,7 +196,7 @@ export function AgentStatusBar() {
   };
 
   return (
-    <section className="bg-linear-to-r from-[#fff5f9] to-[#fde8f1] ring-card relative flex flex-col gap-3 overflow-hidden rounded-2xl p-4 md:flex-row md:items-center md:justify-between">
+    <section className="bg-linear-to-r from-[#fff5f9] to-[#fde8f1] dark:from-[#1d1f2a] dark:to-[#241828] ring-card relative flex flex-col gap-3 overflow-hidden rounded-2xl p-4 md:flex-row md:items-center md:justify-between">
       <span
         aria-hidden
         className="bg-brand/5 pointer-events-none absolute -top-12 -right-12 h-40 w-40 rounded-full blur-2xl"

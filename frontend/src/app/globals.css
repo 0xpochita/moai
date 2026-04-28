@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme inline {
   --color-main: #ffffff;
   --color-surface: #ffffff;
@@ -25,6 +27,27 @@
   --font-display:
     -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", system-ui,
     sans-serif;
+}
+
+html.dark {
+  --color-main: #0b0d14;
+  --color-surface: #14161f;
+  --color-surface-elevated: #1d1f2a;
+  --color-foreground: #f5f5f7;
+  --color-muted: #9aa0aa;
+  --color-muted-soft: #6c7280;
+  --color-brand: #ff3d92;
+  --color-brand-hover: #ff5ca5;
+  --color-brand-soft: rgba(255, 61, 146, 0.16);
+  --color-success: #4ade80;
+  --color-success-soft: rgba(74, 222, 128, 0.16);
+  --color-warning: #fbbf24;
+  --color-warning-soft: rgba(251, 191, 36, 0.16);
+  --color-danger: #f87171;
+  --color-danger-soft: rgba(248, 113, 113, 0.18);
+  --color-border-soft: rgba(255, 255, 255, 0.08);
+  --color-border-strong: rgba(255, 61, 146, 0.32);
+  color-scheme: dark;
 }
 
 @layer utilities {
