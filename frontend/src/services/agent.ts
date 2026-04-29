@@ -119,3 +119,18 @@ export function withdrawNow(args: {
 }): Promise<WithdrawNowResult> {
   return postJson<WithdrawNowResult>("/api/agent/withdraw-now", args);
 }
+
+export interface HarvestNowResult {
+  txHash: Hex;
+  destination: string;
+  feesUsd: number;
+}
+
+export function harvestNow(args: {
+  owner: string;
+  tokenId: string;
+  riskProfile?: "conservative" | "balanced" | "aggressive";
+  minHarvestUsd?: number;
+}): Promise<HarvestNowResult> {
+  return postJson<HarvestNowResult>("/api/agent/harvest-now", args);
+}

@@ -11,6 +11,12 @@ interface AgentActionsState {
   ) => void;
   recordDelegation: (delegateAddress: string) => void;
   recordWithdrawal: (vaultLabel: string, txHash?: string) => void;
+  recordHarvest: (
+    positionTokenId: string,
+    feesUsd: number,
+    destination: string,
+    txHash?: string,
+  ) => void;
   setRemoteActions: (actions: AgentAction[]) => void;
   reset: () => void;
 }
@@ -53,6 +59,20 @@ export const useAgentActionsStore = create<AgentActionsState>((set) => ({
         title: "Withdraw",
         description: `Redeemed ${vaultLabel} → wallet`,
         txHash,
+        createdAtSec: NOW(),
+      };
+      return { actions: [action, ...state.actions].slice(0, 50) };
+    }),
+  recordHarvest: (positionTokenId, feesUsd, destination, txHash) =>
+    set((state) => {
+      const action: AgentAction = {
+        id: `${Date.now()}-harvest`,
+        type: "harvest",
+        title: "Harvest",
+        description: `Collected $${feesUsd.toFixed(2)} fees from #${positionTokenId} → ${destination}`,
+        destination,
+        txHash,
+        positionTokenId,
         createdAtSec: NOW(),
       };
       return { actions: [action, ...state.actions].slice(0, 50) };

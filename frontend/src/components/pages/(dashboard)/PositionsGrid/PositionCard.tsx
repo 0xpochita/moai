@@ -33,10 +33,16 @@ export function PositionCard({ position }: PositionCardProps) {
   const long0 = position.tokenLongName0 ?? position.token0.symbol;
   const long1 = position.tokenLongName1 ?? position.token1.symbol;
   const startMigration = useMigrationStore((s) => s.start);
+  const startHarvest = useMigrationStore((s) => s.startHarvest);
   const isOutOfRange = position.status === "out-of-range";
+  const feesUsd = position.uncollectedFeesUsd ?? 0;
+  const canHarvest = !isOutOfRange && feesUsd >= 1;
 
   const handleMigrate = () => {
     void startMigration(position.owner, position.tokenId);
+  };
+  const handleHarvest = () => {
+    void startHarvest(position.owner, position.tokenId);
   };
 
   return (
@@ -116,8 +122,37 @@ export function PositionCard({ position }: PositionCardProps) {
               size="sm"
             />
           </span>
+          <span className="flex items-center gap-1.5">Migrate Position</span>
+          <span className="bg-white inline-flex h-7 items-center justify-center rounded-full px-2.5">
+            <Image
+              src="/Assets/Images/logo-brand/lifi_brand_assets/SVG/logo_lifi_light_horizontal.svg"
+              alt="Li.Fi Earn"
+              width={48}
+              height={14}
+              className="h-3.5 w-auto"
+            />
+          </span>
+        </button>
+      )}
+
+      {!isOutOfRange && (
+        <button
+          type="button"
+          onClick={handleHarvest}
+          className="bg-brand hover:bg-brand-hover inline-flex h-11 items-center justify-between gap-3 rounded-full px-2 text-xs font-semibold tracking-tight text-white transition-colors active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+          title={`Collect $${feesUsd.toFixed(2)} accrued fees and deposit into best Earn vault. LP stays live.`}
+        >
+          <span className="bg-white/15 inline-flex items-center rounded-full px-1.5 py-1">
+            <TokenPairLogos
+              token0={position.token0}
+              token1={position.token1}
+              size="sm"
+            />
+          </span>
           <span className="flex items-center gap-1.5">
-            Migrate Position
+            {canHarvest
+              ? `Harvest $${feesUsd.toFixed(2)} fees`
+              : "Harvest fees"}
           </span>
           <span className="bg-white inline-flex h-7 items-center justify-center rounded-full px-2.5">
             <Image

@@ -105,4 +105,5 @@ export const NONCE_KEY = {
   migration: 2n,
   withdrawal: 3n,
   rotation: 4n,
+  harvest: 5n,
 } as const;

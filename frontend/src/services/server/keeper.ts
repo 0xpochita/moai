@@ -15,6 +15,7 @@ import {
   setCooldown,
   updateSubscription,
 } from "./keeper-store";
+import { buildHarvestPlan } from "./harvest-planner";
 import { fetchPortfolio, fetchVaults } from "./lifi-earn";
 import { buildMigrationPlan } from "./migration-planner";
 import { fetchPositionsOnChain } from "./positions-onchain";
@@ -25,6 +26,7 @@ interface MigrationOutcome {
     | "skipped-cooldown"
     | "no-plan"
     | "submitted"
+    | "harvested"
     | "logged"
     | "rotation-suggested"
     | "error";
@@ -32,10 +34,15 @@ interface MigrationOutcome {
   txHash?: Hex;
   destination?: string;
   reason?: string;
+  feesUsd?: number;
 }
 
 const ROTATION_APY_DELTA_PCT = Number(
   process.env.KEEPER_ROTATION_APY_DELTA_PCT ?? "0.5",
+);
+const HARVEST_MIN_USD = Number(process.env.KEEPER_HARVEST_MIN_USD ?? "5");
+const HARVEST_INTERVAL_SEC = Number(
+  process.env.KEEPER_HARVEST_INTERVAL_SEC ?? String(24 * 60 * 60),
 );
 
 function isKeeperConfigured(): boolean {
@@ -125,6 +132,132 @@ async function detectRotations(
   return outcomes;
 }
 
+async function processHarvests(
+  ownerAddress: string,
+  positions: Awaited<ReturnType<typeof fetchPositionsOnChain>>,
+): Promise<MigrationOutcome[]> {
+  const inRange = positions.filter((p) => p.status !== "out-of-range");
+  if (inRange.length === 0) return [];
+
+  const outcomes: MigrationOutcome[] = [];
+  const keeperReady =
+    isKeeperConfigured() &&
+    (await isAgentRegistered(ownerAddress as Address));
+
+  for (const position of inRange) {
+    const cooldownKey = `harvest:${position.tokenId}`;
+    if (
+      isCoolingDown(ownerAddress, cooldownKey, HARVEST_INTERVAL_SEC)
+    ) {
+      continue;
+    }
+
+    const feesUsd = position.uncollectedFeesUsd ?? 0;
+    if (feesUsd < HARVEST_MIN_USD) continue;
+
+    let plan: MigrationPlan;
+    try {
+      plan = await buildHarvestPlan(ownerAddress, position.tokenId, undefined, {
+        minHarvestUsd: HARVEST_MIN_USD,
+      });
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      outcomes.push({
+        type: "no-plan",
+        positionTokenId: position.tokenId,
+        reason,
+      });
+      continue;
+    }
+
+    if (!keeperReady) {
+      recordActivity(
+        ownerAddress,
+        makeAction({
+          ownerAddress,
+          type: "harvest",
+          title: "Auto-harvest detected",
+          description: `Position #${position.tokenId} has $${feesUsd.toFixed(2)} accrued fees. Delegate the agent to enable auto-harvest.`,
+          positionTokenId: position.tokenId,
+        }),
+      );
+      outcomes.push({
+        type: "logged",
+        positionTokenId: position.tokenId,
+      });
+      continue;
+    }
+
+    const calls = planLegsToCaliburCalls(plan);
+    if (calls.length !== plan.legs.length) {
+      outcomes.push({
+        type: "no-plan",
+        positionTokenId: position.tokenId,
+        reason: "Harvest plan missing calldata",
+      });
+      continue;
+    }
+
+    const destination = `${plan.destination.protocolName} ${plan.destination.name}`;
+    try {
+      const { typedData, signedBatchedCall } = await buildAgentBatch({
+        userEoa: ownerAddress as Address,
+        calls,
+      });
+      const signature = await signAsAgent(typedData);
+      const txHash = await relaySignedBatch({
+        userEoa: ownerAddress as Address,
+        signedBatchedCall,
+        signature,
+      });
+
+      recordActivity(
+        ownerAddress,
+        makeAction({
+          ownerAddress,
+          type: "harvest",
+          title: "Auto-harvest",
+          description: `Collected $${feesUsd.toFixed(2)} fees from #${position.tokenId} → ${destination}. LP stays live.`,
+          txHash,
+          destination,
+          positionTokenId: position.tokenId,
+        }),
+      );
+      setCooldown(
+        ownerAddress,
+        cooldownKey,
+        Math.floor(Date.now() / 1000),
+      );
+      outcomes.push({
+        type: "harvested",
+        positionTokenId: position.tokenId,
+        txHash,
+        destination,
+        feesUsd,
+      });
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      recordActivity(
+        ownerAddress,
+        makeAction({
+          ownerAddress,
+          type: "harvest",
+          title: "Auto-harvest failed",
+          description: `Could not harvest #${position.tokenId}: ${reason}`,
+          positionTokenId: position.tokenId,
+        }),
+      );
+      outcomes.push({
+        type: "error",
+        positionTokenId: position.tokenId,
+        reason,
+      });
+    }
+  }
+
+  return outcomes;
+}
+
 async function processSubscription(
   ownerAddress: string,
 ): Promise<MigrationOutcome[]> {
@@ -136,8 +269,10 @@ async function processSubscription(
   const oor = positions.filter((p) => p.status === "out-of-range");
   const outcomesAcc: MigrationOutcome[] = [];
   if (oor.length === 0) {
+    const harvests = await processHarvests(ownerAddress, positions);
     const rot = await detectRotations(ownerAddress);
-    return rot.length > 0 ? rot : [{ type: "no-action" }];
+    const combined = [...harvests, ...rot];
+    return combined.length > 0 ? combined : [{ type: "no-action" }];
   }
 
   const outcomes: MigrationOutcome[] = outcomesAcc;
@@ -244,6 +379,9 @@ async function processSubscription(
     }
   }
 
+  const harvests = await processHarvests(ownerAddress, positions);
+  outcomes.push(...harvests);
+
   const rotations = await detectRotations(ownerAddress);
   outcomes.push(...rotations);
 
@@ -269,16 +407,19 @@ export async function runKeeperTick(): Promise<{
     try {
       const outcomes = await processSubscription(sub.address);
       const submitted = outcomes.filter((o) => o.type === "submitted").length;
+      const harvested = outcomes.filter((o) => o.type === "harvested").length;
       const logged = outcomes.filter((o) => o.type === "logged").length;
-      migrations += submitted + logged;
+      migrations += submitted + harvested + logged;
 
       const lastResult: SubscriptionResult = outcomes.some(
         (o) => o.type === "submitted",
       )
         ? "migrated"
-        : outcomes.some((o) => o.type === "error")
-          ? "error"
-          : "no-action";
+        : outcomes.some((o) => o.type === "harvested")
+          ? "migrated"
+          : outcomes.some((o) => o.type === "error")
+            ? "error"
+            : "no-action";
       const lastError =
         outcomes.find((o) => o.type === "error")?.reason ?? null;
 

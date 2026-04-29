@@ -48,3 +48,26 @@ export async function fetchWithdrawalPlan(
   }
   return json.plan;
 }
+
+export async function fetchHarvestPlan(
+  owner: string,
+  tokenId: string,
+  options?: { riskProfile?: RiskProfileWire; signal?: AbortSignal },
+): Promise<MigrationPlan> {
+  const res = await fetch("/api/migrate/harvest", {
+    method: "POST",
+    signal: options?.signal,
+    headers: { "content-type": "application/json", accept: "application/json" },
+    body: JSON.stringify({
+      owner,
+      tokenId,
+      riskProfile: options?.riskProfile,
+    }),
+  });
+
+  const json = (await res.json()) as PlanResponse;
+  if (!res.ok || !json.plan) {
+    throw new Error(json.error ?? `harvest plan failed (${res.status})`);
+  }
+  return json.plan;
+}

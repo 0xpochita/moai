@@ -1,4 +1,4 @@
-export type AgentActionType = "migrate" | "delegation" | "exit";
+export type AgentActionType = "migrate" | "delegation" | "exit" | "harvest";
 
 export interface AgentAction {
   id: string;

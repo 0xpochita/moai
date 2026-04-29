@@ -59,6 +59,7 @@ export function MigrationModal() {
   const error = useMigrationStore((s) => s.error);
   const txHash = useMigrationStore((s) => s.txHash);
   const withdrawalTarget = useMigrationStore((s) => s.withdrawalTarget);
+  const harvestTarget = useMigrationStore((s) => s.harvestTarget);
   const cancel = useMigrationStore((s) => s.cancel);
   const execute = useMigrationStore((s) => s.execute);
   const dismiss = useMigrationStore((s) => s.dismiss);
@@ -82,13 +83,13 @@ export function MigrationModal() {
 
   useEffect(() => {
     if (status === "complete") {
-      toastTx({
-        title:
-          plan?.intent === "withdraw"
-            ? "Withdrawal submitted"
-            : "Migration submitted",
-        txHash: txHash ?? undefined,
-      });
+      const title =
+        plan?.intent === "withdraw"
+          ? "Withdrawal submitted"
+          : plan?.intent === "harvest"
+            ? "Fees harvested"
+            : "Migration submitted";
+      toastTx({ title, txHash: txHash ?? undefined });
       void retryPositions();
       if (address) void loadHoldings(address);
     }
@@ -99,6 +100,8 @@ export function MigrationModal() {
   const busy = status === "planning" || status === "executing";
   const isWithdraw =
     plan?.intent === "withdraw" || withdrawalTarget !== null;
+  const isHarvest =
+    plan?.intent === "harvest" || (harvestTarget !== null && !isWithdraw);
   const riskProfile = useSettingsStore((s) => s.riskProfile);
   const strategy = STRATEGY_COPY[riskProfile];
 
@@ -112,12 +115,18 @@ export function MigrationModal() {
             </span>
             <div>
               <div className="text-muted text-[10px] font-medium tracking-wide uppercase">
-                {isWithdraw ? "Withdrawal plan" : "Migration plan"}
+                {isWithdraw
+                  ? "Withdrawal plan"
+                  : isHarvest
+                    ? "Harvest plan"
+                    : "Migration plan"}
               </div>
               <div className="text-main text-base font-semibold tracking-tight">
                 {isWithdraw
                   ? "Redeem vault to wallet"
-                  : "Move out-of-range position"}
+                  : isHarvest
+                    ? "Compound LP fees into vault"
+                    : "Move out-of-range position"}
               </div>
             </div>
           </div>
@@ -243,6 +252,8 @@ export function MigrationModal() {
                 </div>
                 {isWithdraw ? (
                   <Badge tone="outline">Holding</Badge>
+                ) : isHarvest ? (
+                  <Badge tone="success">Fees</Badge>
                 ) : (
                   <Badge tone="danger">Out of range</Badge>
                 )}
@@ -363,12 +374,20 @@ export function MigrationModal() {
               {status === "executing" ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                  {isWithdraw ? "Withdrawing…" : "Migrating…"}
+                  {isWithdraw
+                    ? "Withdrawing…"
+                    : isHarvest
+                      ? "Harvesting…"
+                      : "Migrating…"}
                 </>
               ) : (
                 <>
                   <ShieldCheck className="h-4 w-4" aria-hidden />
-                  {isWithdraw ? "Confirm withdrawal" : "Confirm migration"}
+                  {isWithdraw
+                    ? "Confirm withdrawal"
+                    : isHarvest
+                      ? "Confirm harvest"
+                      : "Confirm migration"}
                 </>
               )}
             </button>
@@ -377,7 +396,11 @@ export function MigrationModal() {
         {status === "complete" && (
           <div className="bg-success-soft text-success flex flex-col items-center gap-1 rounded-xl py-4 text-sm font-semibold tracking-tight">
             <SuccessAnimation size={120} loop />
-            {isWithdraw ? "Withdrawal submitted" : "Migration submitted"}
+            {isWithdraw
+              ? "Withdrawal submitted"
+              : isHarvest
+                ? "Fees harvested"
+                : "Migration submitted"}
           </div>
         )}
       </div>

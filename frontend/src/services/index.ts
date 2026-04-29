@@ -6,6 +6,8 @@ export {
   buildRevocation,
   fetchAgentInfo,
   fetchAgentStatus,
+  type HarvestNowResult,
+  harvestNow,
   type JsonSignedBatchedCall,
   type MigrateNowResult,
   migrateNow,
@@ -28,5 +30,9 @@ export {
   subscribeKeeper,
   unsubscribeKeeper,
 } from "./keeper";
-export { fetchMigrationPlan, fetchWithdrawalPlan } from "./migration";
+export {
+  fetchHarvestPlan,
+  fetchMigrationPlan,
+  fetchWithdrawalPlan,
+} from "./migration";
 export { fetchPositions } from "./positions";

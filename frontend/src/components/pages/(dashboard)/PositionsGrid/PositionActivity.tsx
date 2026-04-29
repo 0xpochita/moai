@@ -4,6 +4,7 @@ import {
   ArrowRightLeft,
   ArrowUpRight,
   CheckCircle2,
+  Coins,
   LogOut,
   Sparkles,
 } from "lucide-react";
@@ -30,6 +31,7 @@ const ICON_MAP: Record<AgentActionType, typeof ArrowRightLeft> = {
   migrate: ArrowRightLeft,
   delegation: CheckCircle2,
   exit: LogOut,
+  harvest: Coins,
 };
 
 const MAX_VISIBLE = 3;

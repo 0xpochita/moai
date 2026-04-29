@@ -82,10 +82,14 @@ export function setCooldown(
   cooldowns.set(cooldownKey(address, tokenId), sec);
 }
 
-export function isCoolingDown(address: string, tokenId: string): boolean {
+export function isCoolingDown(
+  address: string,
+  tokenId: string,
+  intervalSec: number = COOLDOWN_SEC,
+): boolean {
   const last = getCooldown(address, tokenId);
   if (last === 0) return false;
-  return Math.floor(Date.now() / 1000) - last < COOLDOWN_SEC;
+  return Math.floor(Date.now() / 1000) - last < intervalSec;
 }
 
 export function recordActivity(address: string, action: AgentAction): void {

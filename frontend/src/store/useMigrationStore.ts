@@ -1,8 +1,10 @@
 import type { Hex } from "viem";
 import { create } from "zustand";
 import {
+  fetchHarvestPlan,
   fetchMigrationPlan,
   fetchWithdrawalPlan,
+  harvestNow,
   migrateNow,
   withdrawNow,
 } from "@/services";
@@ -23,7 +25,11 @@ interface MigrationState {
   txHash: Hex | null;
   /// vault address (for withdrawals) — needed when re-submitting via agent.
   withdrawalTarget: string | null;
+  /// position tokenId being harvested — used to keep modal title correct
+  /// during the "planning" state before plan?.intent is available.
+  harvestTarget: string | null;
   start: (owner: string, tokenId: string) => Promise<void>;
+  startHarvest: (owner: string, tokenId: string) => Promise<void>;
   startWithdrawal: (owner: string, vaultAddress: string) => Promise<void>;
   cancel: () => void;
   execute: (params?: ExecuteParams) => Promise<void>;
@@ -38,6 +44,7 @@ export const useMigrationStore = create<MigrationState>((set, get) => ({
   open: false,
   txHash: null,
   withdrawalTarget: null,
+  harvestTarget: null,
   start: async (owner, tokenId) => {
     const { controller } = get();
     controller?.abort();
@@ -50,6 +57,7 @@ export const useMigrationStore = create<MigrationState>((set, get) => ({
       open: true,
       txHash: null,
       withdrawalTarget: null,
+      harvestTarget: null,
     });
     try {
       const riskProfile = useSettingsStore.getState().riskProfile;
@@ -66,6 +74,35 @@ export const useMigrationStore = create<MigrationState>((set, get) => ({
       set({ status: "error", error: message, controller: null });
     }
   },
+  startHarvest: async (owner, tokenId) => {
+    const { controller } = get();
+    controller?.abort();
+    const next = new AbortController();
+    set({
+      status: "planning",
+      plan: null,
+      error: null,
+      controller: next,
+      open: true,
+      txHash: null,
+      withdrawalTarget: null,
+      harvestTarget: tokenId,
+    });
+    try {
+      const riskProfile = useSettingsStore.getState().riskProfile;
+      const plan = await fetchHarvestPlan(owner, tokenId, {
+        riskProfile,
+        signal: next.signal,
+      });
+      if (next.signal.aborted) return;
+      set({ status: "ready", plan, controller: null });
+    } catch (err) {
+      if (next.signal.aborted) return;
+      const message =
+        err instanceof Error ? err.message : "Could not plan harvest";
+      set({ status: "error", error: message, controller: null });
+    }
+  },
   startWithdrawal: async (owner, vaultAddress) => {
     const { controller } = get();
     controller?.abort();
@@ -78,6 +115,7 @@ export const useMigrationStore = create<MigrationState>((set, get) => ({
       open: true,
       txHash: null,
       withdrawalTarget: vaultAddress,
+      harvestTarget: null,
     });
     try {
       const plan = await fetchWithdrawalPlan(owner, vaultAddress, next.signal);
@@ -100,6 +138,7 @@ export const useMigrationStore = create<MigrationState>((set, get) => ({
       open: false,
       txHash: null,
       withdrawalTarget: null,
+      harvestTarget: null,
     });
   },
   execute: async (params) => {
@@ -124,6 +163,20 @@ export const useMigrationStore = create<MigrationState>((set, get) => ({
         });
         txHash = result.txHash;
         agentActions.recordWithdrawal(plan.source.pair, txHash);
+      } else if (plan.intent === "harvest") {
+        const riskProfile = useSettingsStore.getState().riskProfile;
+        const result = await harvestNow({
+          owner,
+          tokenId: plan.positionTokenId,
+          riskProfile,
+        });
+        txHash = result.txHash;
+        agentActions.recordHarvest(
+          plan.positionTokenId,
+          result.feesUsd,
+          result.destination,
+          txHash,
+        );
       } else {
         const riskProfile = useSettingsStore.getState().riskProfile;
         const result = await migrateNow({
@@ -154,6 +207,7 @@ export const useMigrationStore = create<MigrationState>((set, get) => ({
       open: false,
       txHash: null,
       withdrawalTarget: null,
+      harvestTarget: null,
     });
   },
 }));

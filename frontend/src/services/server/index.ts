@@ -14,7 +14,11 @@ export {
   APPROVE_MAX,
   type BurnV4Args,
   encodeApproveCalldata,
+  encodeV3HarvestCalldata,
   encodeV4BurnCalldata,
+  encodeV4HarvestCalldata,
+  type HarvestV3Args,
+  type HarvestV4Args,
 } from "./calldata-encoders";
 export { runKeeperTick } from "./keeper";
 export {
@@ -34,6 +38,7 @@ export {
   fetchComposerQuote,
 } from "./lifi-composer";
 export { fetchPortfolio, fetchVaults, logoUrlForToken } from "./lifi-earn";
+export { buildHarvestPlan } from "./harvest-planner";
 export { buildMigrationPlan } from "./migration-planner";
 export { fetchPositionsOnChain } from "./positions-onchain";
 export { fetchPositionsForOwner } from "./positions-subgraph";

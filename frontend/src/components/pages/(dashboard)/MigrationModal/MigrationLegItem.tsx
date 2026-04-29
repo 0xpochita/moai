@@ -4,6 +4,7 @@ import {
   ArrowDownToLine,
   ArrowRightLeft,
   ArrowUpFromLine,
+  Coins,
   Flame,
 } from "lucide-react";
 import Image from "next/image";
@@ -12,6 +13,7 @@ import type { MigrationLeg, MigrationLegKind } from "@/types";
 
 const ICON_MAP: Record<MigrationLegKind, typeof Flame> = {
   burn: Flame,
+  harvest: Coins,
   swap: ArrowRightLeft,
   deposit: ArrowDownToLine,
   withdraw: ArrowUpFromLine,
@@ -19,6 +21,7 @@ const ICON_MAP: Record<MigrationLegKind, typeof Flame> = {
 
 const LABEL_MAP: Record<MigrationLegKind, string> = {
   burn: "Burn LP",
+  harvest: "Collect Fees",
   swap: "Swap",
   deposit: "Deposit",
   withdraw: "Redeem",
@@ -36,7 +39,7 @@ function getTargetLogo(leg: MigrationLeg): {
   alt: string;
   horizontal?: boolean;
 } | null {
-  if (leg.kind === "burn") {
+  if (leg.kind === "burn" || leg.kind === "harvest") {
     return { src: "/Assets/Images/logo-defi/uniswap-logo.svg", alt: "Uniswap" };
   }
   if (leg.kind === "deposit" || leg.kind === "withdraw") {
