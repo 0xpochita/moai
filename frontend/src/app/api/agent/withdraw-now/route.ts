@@ -54,7 +54,14 @@ export async function POST(request: Request) {
   }
 
   try {
-    const plan = await buildWithdrawalPlan(userEoa, vault);
+    // Plan once. If composer quote failed (best-effort in planner), retry
+    // the whole plan once before giving up — Li.Fi quotes are flaky on
+    // first call for fresh vault deposits.
+    let plan = await buildWithdrawalPlan(userEoa, vault);
+    const hasMissingCalldata = plan.legs.some((leg) => !leg.calldata);
+    if (hasMissingCalldata) {
+      plan = await buildWithdrawalPlan(userEoa, vault);
+    }
 
     const calls: CaliburCall[] = plan.legs
       .filter((leg) => leg.calldata)
@@ -66,7 +73,10 @@ export async function POST(request: Request) {
 
     if (calls.length !== plan.legs.length) {
       return NextResponse.json(
-        { error: "Plan has legs without calldata; aborting." },
+        {
+          error:
+            "Could not build a Li.Fi redemption route for this vault. The vault may not be supported by Li.Fi Composer yet — please try again or contact support.",
+        },
         { status: 502 },
       );
     }

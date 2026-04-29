@@ -60,9 +60,14 @@ export async function POST(request: Request) {
   }
 
   try {
-    const plan = await buildMigrationPlan(userEoa, tokenId, undefined, {
+    let plan = await buildMigrationPlan(userEoa, tokenId, undefined, {
       riskProfile,
     });
+    if (plan.legs.some((leg) => !leg.calldata)) {
+      plan = await buildMigrationPlan(userEoa, tokenId, undefined, {
+        riskProfile,
+      });
+    }
 
     const calls: CaliburCall[] = plan.legs
       .filter((leg) => leg.calldata)
@@ -74,7 +79,10 @@ export async function POST(request: Request) {
 
     if (calls.length !== plan.legs.length) {
       return NextResponse.json(
-        { error: "Plan has legs without calldata; aborting." },
+        {
+          error:
+            "Could not build a complete migration route. Please try again.",
+        },
         { status: 502 },
       );
     }
