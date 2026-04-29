@@ -11,7 +11,12 @@
 
 ---
 
-MOAI is an agentic liquidity manager built on top of **Uniswap v3 + v4**. Users delegate to a keeper agent with a single EIP-712 signature; the agent watches their Uniswap positions and, when one drifts out of range, **atomically burns the LP via the Uniswap v4 PositionManager**, **swaps the proceeds through the Uniswap Trading API + Universal Router**, and re-deploys capital into the highest-yielding Li.Fi Earn vault that matches the user's risk profile — all in one signed batch on Base, with the relayer paying gas. Uniswap is the substrate; the agent is the worker that keeps it productive.
+MOAI is an agentic liquidity manager built on top of **Uniswap v3 + v4**. Users delegate to a keeper agent with a single EIP-712 signature; the agent watches their Uniswap positions and runs in **two complementary modes** — Migrate (when out-of-range) and Harvest (when in-range and accruing fees). Both modes route through the **Uniswap Trading API + Universal Router** and settle in **one atomic Calibur batched transaction** on Base, with the relayer paying gas. Uniswap is the substrate; the agent is the worker that keeps it productive.
+
+> **Same agent. Two modes. One rule: your liquidity should never sleep.**
+>
+> - **In-range LP** → MOAI **harvests accrued fees** every 24h, swaps to USDC via Trading API, deposits to the best Earn vault. **Your LP stays live.**
+> - **Out-of-range LP** → MOAI **migrates** the position: burn → swap → vault deposit, all atomic.
 
 ---
 
@@ -48,30 +53,72 @@ And none of them coordinate execution across users to get a better swap quote, o
 
 ### The Solution
 
-MOAI solves this with five core primitives built on top of the Uniswap stack:
+MOAI solves this with six core primitives built on top of the Uniswap stack:
 
 **1. EIP-7702 Session Keys via Calibur** — One EIP-712 signature registers a 30-day keeper key on the user's EOA via the **Calibur singleton — Uniswap's official EIP-7702 implementation** (`0x000000009B1D0aF20D8C6d0A44e162d11F9b8f00`). No on-chain delegation tx, no gas. The key is scoped by a `CaliburExecutionHook` that whitelists exactly the Uniswap PositionManager + Universal Router selectors MOAI is allowed to execute.
 
-**2. Atomic Uniswap-Native Migration** — When a position goes out of range, MOAI builds a `SignedBatchedCall` containing all legs: native **Uniswap v4 actions (`BURN_POSITION` 0x03 + `TAKE_PAIR` 0x11 + `SWEEP` 0x14 for ETH-native pools)** → ERC20 `approve` for Permit2 → **Uniswap Trading API `/quote` + `/swap` calldata routed through Universal Router** → `approve` Li.Fi → vault deposit. The user's wallet stays untouched; one transaction, one tx hash, one BaseScan link.
+**2. Atomic Uniswap-Native Migration (out-of-range)** — When a position goes out of range, MOAI builds a `SignedBatchedCall` containing all legs: native **Uniswap v4 actions (`BURN_POSITION` 0x03 + `TAKE_PAIR` 0x11 + `SWEEP` 0x14 for ETH-native pools)** → ERC20 `approve` for Permit2 → **Uniswap Trading API `/quote` + `/swap` calldata routed through Universal Router** → `approve` Li.Fi → vault deposit. The user's wallet stays untouched; one transaction, one tx hash, one BaseScan link.
 
-**3. Risk-Profile-Driven Vault Selection** — Three profiles (Conservative / Balanced / Aggressive) drive a different protocol allowlist for the destination Earn vault. Conservative routes to the highest-TVL bluechip (Aave, Compound, Lido); Balanced picks best APY across Morpho/Aave/Compound; Aggressive maximizes yield across Pendle, Ethena, Yearn, Euler, EtherFi.
+**3. Atomic Fee Harvest (in-range) — `NEW`** — When a position is healthy and earning, MOAI doesn't just sit there. Every 24h (or on a manual trigger), the agent harvests **only the accrued fees** using v4 `DECREASE_LIQUIDITY(liquidity = 0)` (or v3 `NonfungiblePositionManager.collect()`), then swaps non-USDC fees to USDC via the **Uniswap Trading API**, and deposits the result into the best Earn vault. The LP **stays live** — Uniswap TVL is untouched, fees compound into yield instead of sitting idle. Same Calibur batched-call architecture as migration; only the first leg differs.
 
-**4. Relayer-Funded Gas** — A keeper hot wallet submits the batched tx and pays gas. The user's EOA pays nothing for the migration itself — fees are deducted from accrued LP fees / yield over time, not from principal.
+**4. Risk-Profile-Driven Vault Selection** — Three profiles (Conservative / Balanced / Aggressive) drive a different protocol allowlist for the destination Earn vault, used by both migrate and harvest modes. Conservative routes to the highest-TVL bluechip (Aave, Compound, Lido); Balanced picks best APY across Morpho/Aave/Compound; Aggressive maximizes yield across Pendle, Ethena, Yearn, Euler, EtherFi.
 
-**5. Funds Never Leave Custody** — Calibur runs as the user's EOA bytecode under EIP-7702. There is no smart-contract vault holding LP NFTs, no proxy custodian, no withdrawal queue. The agent has a key; the user always owns the EOA.
+**5. Relayer-Funded Gas** — A keeper hot wallet submits the batched tx and pays gas. The user's EOA pays nothing for the migration or harvest itself — fees are deducted from accrued LP fees / yield over time, not from principal.
+
+**6. Funds Never Leave Custody** — Calibur runs as the user's EOA bytecode under EIP-7702. There is no smart-contract vault holding LP NFTs, no proxy custodian, no withdrawal queue. The agent has a key; the user always owns the EOA.
+
+---
+
+## Dual-Mode Strategy
+
+MOAI runs two complementary, mutually-exclusive modes per position. The keeper picks the right mode every tick — no user input required.
+
+|  | **Migrate Mode** | **Harvest Mode** |
+|---|---|---|
+| **Trigger** | Position is **out-of-range** | Position is **in-range** AND accrued fees ≥ `$5` (env-tunable) |
+| **First leg** | `BURN_POSITION` (v4 action `0x03`) — destroys the LP NFT, returns principal + fees | `DECREASE_LIQUIDITY(liquidity = 0)` (v4 action `0x01`) **or** v3 `collect()` — settles fees only, LP NFT untouched |
+| **Subsequent legs** | `TAKE_PAIR` → Permit2 approve → Trading API swap → Li.Fi approve → Composer deposit | (same downstream legs — only the first leg differs) |
+| **Cooldown** | `KEEPER_COOLDOWN_SEC` (1h default) — same position can't migrate twice | `KEEPER_HARVEST_INTERVAL_SEC` (24h default) — namespaced cooldown key `harvest:{tokenId}` |
+| **Effect on LP** | LP NFT burned, capital fully redirected | LP NFT alive, principal liquidity untouched, fees redirected |
+| **Effect on Uniswap TVL** | Position-specific TVL exits Uniswap | TVL stays in Uniswap; only fees move |
+| **Frequency** | Reactive (only when out-of-range) | Proactive (every 24h while in-range) |
+| **Trading API usage** | One swap per migration (rare) | One swap per harvest cycle (frequent — **continuous Uniswap volume**) |
+| **Story** | "Rescue idle capital" | "**Compound active LP yield**" |
+
+### Why both modes matter for Uniswap
+
+Migrate mode handles the *failure case* (capital stuck out of range). Harvest mode handles the *success case* (LP earning, but fees should be working too). Together, they cover the entire LP lifecycle without ever forcing the user to exit Uniswap to chase yield elsewhere.
+
+### Decision flow per keeper tick
+
+```
+for each user position:
+  if status == "out-of-range":
+      → migrate flow (burn + swap + deposit)
+  else if status == "in-range":
+      if accruedFeesUsd >= MIN_HARVEST_USD
+         AND lastHarvest > MIN_HARVEST_INTERVAL ago:
+          → harvest flow (collect + swap + deposit)
+      else:
+          → no-op (cooldown or fees too small)
+```
 
 ---
 
 ## Features
 
 - **One-Signature Delegation via Calibur (Uniswap's EIP-7702)**: Register the agent in 30 seconds using Uniswap's official 7702 singleton — no on-chain tx, no gas, 30-day auto-expiry, revoke anytime
+- **Dual-Mode Agent — Migrate + Harvest**: Out-of-range positions get migrated; in-range positions get their fees auto-harvested every 24h. Same agent, same Calibur batched-call rails — different first leg.
 - **Atomic Uniswap-Native Migration Batches**: Burn LP via v4 PositionManager → swap via Universal Router → deposit, all in one transaction via Calibur's `SignedBatchedCall`
-- **Full Uniswap v3 + v4 Coverage**: Position discovery via The Graph (Uniswap subgraph) + Uniswap Public GraphQL + on-chain PositionManager reads; v4 burn calldata encoded with native action enums (`BURN_POSITION` 0x03, `TAKE_PAIR` 0x11, `SWEEP` 0x14 for ETH-native pools)
-- **Uniswap Trading API as the Swap Engine**: `/check_approval`, `/quote`, and `/swap` endpoints route every migration through the Universal Router with CLASSIC routing across V3+V4 pools and 0.5% slippage
+- **Atomic Fee Harvest Batches `NEW`**: v4 `DECREASE_LIQUIDITY(liquidity=0)` or v3 `collect()` → Permit2 approve → Trading API swap (fees → USDC) → Li.Fi vault deposit. **LP stays live throughout** — Uniswap TVL never leaves the protocol, only the accrued fees move into yield.
+- **Auto-Harvest Keeper `NEW`**: The polling keeper detects in-range positions with ≥`$5` accrued fees and harvests them on a 24h cadence (both env-tunable via `KEEPER_HARVEST_MIN_USD` and `KEEPER_HARVEST_INTERVAL_SEC`). Cooldown is namespaced (`harvest:{tokenId}`) so it never collides with migrate cooldowns.
+- **Manual Harvest CTA `NEW`**: Per-position `Harvest fees` button on in-range cards with the live USD amount — click to preview the plan and execute on demand.
+- **Full Uniswap v3 + v4 Coverage**: Position discovery via The Graph (Uniswap subgraph) + Uniswap Public GraphQL + on-chain PositionManager reads; v4 burn + harvest calldata encoded with native action enums (`DECREASE_LIQUIDITY` 0x01, `BURN_POSITION` 0x03, `TAKE_PAIR` 0x11, `SWEEP` 0x14 for ETH-native pools)
+- **Uniswap Trading API as the Swap Engine**: `/check_approval`, `/quote`, and `/swap` endpoints route every migration AND harvest through the Universal Router with CLASSIC routing across V3+V4 pools and 0.5% slippage
 - **Uniswap Pool Stats Live in UI**: TVL + 24h volume + APR range pulled from Uniswap's Public GraphQL `topV4Pools` query, refreshed per position
-- **Risk-Aware Routing**: Three risk profiles with distinct protocol allowlists guarantee meaningfully different vault selections per user preference
+- **Risk-Aware Routing**: Three risk profiles with distinct protocol allowlists guarantee meaningfully different vault selections per user preference (applies to both migrate and harvest)
 - **One-Click Create on Uniswap**: Direct link to `app.uniswap.org/positions/create/v4` so users can spin up a new LP and have MOAI track it instantly
-- **Live Activity Feed**: Real-time keeper tick stats, last-check timestamps, and per-position migration history
+- **Live Activity Feed**: Real-time keeper tick stats, last-check timestamps, and per-position migration / harvest history with explorer links
 - **Animated UX**: Lottie-driven success / agent-active / migration-plan animations for tactile feedback
 - **Dark Mode**: Full theme support with persisted preference, no FOUC, brand-aware gradients
 - **Withdraw Flow**: Redeem any vault holding back to USDC in your wallet, atomically via Li.Fi Composer
@@ -106,12 +153,14 @@ MOAI is built directly on top of the **Uniswap Trading API**, **Uniswap Public G
 | **v4 Pool Stats** | `services/server/uniswap-v4-stats.ts` | Queries `topV4Pools` on Uniswap's Public GraphQL to power TVL + 24h volume + APR display per position |
 | **Position Discovery** | `services/server/positions-subgraph.ts` | Pulls user's Uniswap v3 NFT positions from The Graph using Uniswap's official subgraph (`HMuAwufqZ1YCRmzL2SfHTVkzZovC9VL2UAKhjvRqKiR1`) |
 | **On-Chain Reader** | `services/server/positions-onchain.ts` | Reads PositionManager v3/v4 directly via viem to verify in-range / out-of-range status and current liquidity |
-| **v4 Burn Encoder** | `services/server/calldata-encoders.ts` | Encodes `modifyLiquidities` with native v4 actions: `BURN_POSITION` (0x03) + `TAKE_PAIR` (0x11) + `SWEEP` (0x14) for ETH-native pools |
+| **v4 Burn + Harvest Encoders** | `services/server/calldata-encoders.ts` | Encodes `modifyLiquidities` with native v4 actions: `DECREASE_LIQUIDITY` (0x01, fee-only) + `BURN_POSITION` (0x03) + `TAKE_PAIR` (0x11) + `SWEEP` (0x14). Also exports `encodeV3HarvestCalldata` for v3 `NonfungiblePositionManager.collect()` |
 | **Migration Planner** | `services/server/migration-planner.ts` | Orchestrates Trading API quote/swap + v4 burn + Li.Fi deposit into one `SignedBatchedCall` |
-| **Calibur Typed-Data** | `lib/calibur/eip712.ts` | EIP-712 typed-data envelopes for `SignedBatchedCall` against Uniswap's Calibur singleton (`0x0000…f00`) |
-| **Calibur ABI + Builder** | `lib/calibur/abi.ts` + `services/server/calibur.ts` | Builds and signs registration / migration / revocation batches that execute as the user's EOA via EIP-7702 |
-| **Plan Endpoint** | `app/api/migrate/plan/route.ts` | Server-side endpoint that returns a fully-built atomic Uniswap-native migration plan, ready to sign |
-| **Migrate Now Endpoint** | `app/api/agent/migrate-now/route.ts` | Backend executor that signs the plan as the agent key and relays `Calibur.execute` to user's EOA |
+| **Harvest Planner `NEW`** | `services/server/harvest-planner.ts` | In-range mirror of migration-planner: builds a `SignedBatchedCall` with `harvest` first leg (v3 `collect()` or v4 `DECREASE_LIQUIDITY=0`), then Trading API swap (fees → USDC), then Li.Fi vault deposit. Rejects out-of-range positions and fees below threshold. |
+| **Auto-Harvest Keeper `NEW`** | `services/server/keeper.ts` (`processHarvests`) | Per-tick scan of in-range positions: skip cooldown (`harvest:{tokenId}`, 24h default), skip if accrued fees < `KEEPER_HARVEST_MIN_USD` (default $5), otherwise plan + sign + relay. Logs `Auto-harvest` activity with the harvested USD and destination vault. |
+| **Calibur Typed-Data** | `lib/calibur/eip712.ts` | EIP-712 typed-data envelopes for `SignedBatchedCall` against Uniswap's Calibur singleton (`0x0000…f00`). Includes `NONCE_KEY.harvest` (5n) so harvest batches don't collide with migrate (2n) or withdrawal (3n) sequences. |
+| **Calibur ABI + Builder** | `lib/calibur/abi.ts` + `services/server/calibur.ts` | Builds and signs registration / migration / harvest / revocation batches that execute as the user's EOA via EIP-7702 |
+| **Plan Endpoints** | `app/api/migrate/plan/route.ts` + `app/api/migrate/harvest/route.ts` `NEW` | Server-side endpoints that return fully-built atomic Uniswap-native plans (migrate or harvest), ready to sign |
+| **Executor Endpoints** | `app/api/agent/migrate-now/route.ts` + `app/api/agent/harvest-now/route.ts` `NEW` | Backend executors that sign the plan as the agent key and relay `Calibur.execute` to user's EOA. Both retry the plan once on Li.Fi quote miss before failing. |
 | **Position Card** | `components/pages/(dashboard)/PositionsGrid/PositionCard.tsx` | Live UI for each Uniswap LP — pool stats, status, **View position** deep-link to `app.uniswap.org/positions/v4/base/{tokenId}` |
 | **Create New Position** | `components/pages/(dashboard)/PositionsGrid/PositionsHeader.tsx` | One-click CTA to `app.uniswap.org/positions/create/v4` so users can spin up an LP and have MOAI track it instantly |
 
@@ -145,43 +194,62 @@ sequenceDiagram
     User->>Wallet: 1. Connect (Smart Wallet auto-delegates to Calibur)
     User->>MOAI: 2. Sign EIP-712 (register agent key, 30-day expiry)
     MOAI->>Calibur: 3. Relayer submits register() + update(hook)
-    loop Polling
-      Keeper->>Uniswap: 4. Read positions, detect out-of-range
+    loop Every keeper tick
+      Keeper->>Uniswap: 4. Read positions + status + accrued fees
+      alt Position OUT-OF-RANGE
+        Keeper->>Uniswap: 5a. Trading API quote + swap calldata (principal → USDC)
+        Keeper->>LiFi: 6a. Composer quote (deposit calldata)
+        Keeper->>Calibur: 7a. SignedBatchedCall (BURN → swap → deposit)
+        Calibur->>Uniswap: PositionManager.modifyLiquidities (BURN + TAKE_PAIR)
+        Calibur->>Uniswap: Universal Router swap
+        Calibur->>LiFi: Composer.deposit
+      else Position IN-RANGE & fees ≥ $5 & cooldown elapsed
+        Keeper->>Uniswap: 5b. Trading API quote + swap calldata (fees → USDC)
+        Keeper->>LiFi: 6b. Composer quote (deposit calldata)
+        Keeper->>Calibur: 7b. SignedBatchedCall (HARVEST → swap → deposit)
+        Calibur->>Uniswap: PositionManager.modifyLiquidities (DECREASE_LIQUIDITY=0 + TAKE_PAIR)
+        Calibur->>Uniswap: Universal Router swap
+        Calibur->>LiFi: Composer.deposit
+      end
     end
-    Keeper->>Uniswap: 5. Trading API quote + swap calldata
-    Keeper->>LiFi: 6. Composer quote (deposit calldata)
-    Keeper->>Calibur: 7. SignedBatchedCall (burn → swap → deposit)
-    Calibur->>Uniswap: 8. PositionManager.modifyLiquidities (BURN + TAKE_PAIR)
-    Calibur->>Uniswap: 9. Universal Router swap
-    Calibur->>LiFi: 10. Composer.deposit
-    LiFi-->>User: Vault shares minted to EOA
+    LiFi-->>User: Vault shares minted to EOA (LP NFT preserved in harvest mode)
 ```
 
-### Calldata Pipeline
+### Calldata Pipeline (Dual-Mode)
 
 ```mermaid
 graph TD
-    POS[Position out-of-range] --> PLAN[migration-planner.ts]
-    PLAN --> BURN[encodeV4BurnCalldata]
-    PLAN --> SWAP[uniswap-trade.ts]
-    PLAN --> DEPOSIT[lifi-composer.ts]
-    BURN --> CALL1[Call 1: PositionManager.modifyLiquidities]
-    SWAP --> CALL2[Call 2: ERC20.approve Permit2]
-    SWAP --> CALL3[Call 3: UniversalRouter.execute]
-    DEPOSIT --> CALL4[Call 4: ERC20.approve Li.Fi Diamond]
-    DEPOSIT --> CALL5[Call 5: Li.Fi Diamond.swapAndDeposit]
-    CALL1 --> BATCH[SignedBatchedCall]
-    CALL2 --> BATCH
-    CALL3 --> BATCH
-    CALL4 --> BATCH
-    CALL5 --> BATCH
+    OOR[Position OUT-OF-RANGE] --> MPLAN[migration-planner.ts]
+    INR[Position IN-RANGE + fees ≥ threshold] --> HPLAN[harvest-planner.ts]
+
+    MPLAN --> BURN[encodeV4BurnCalldata<br/>BURN_POSITION + TAKE_PAIR + SWEEP]
+    HPLAN --> HARVEST[encodeV4HarvestCalldata<br/>DECREASE_LIQUIDITY=0 + TAKE_PAIR + SWEEP<br/>or v3 collect&#40;&#41;]
+
+    MPLAN --> SWAP[uniswap-trade.ts<br/>Trading API quote + swap]
+    HPLAN --> SWAP
+
+    MPLAN --> DEP[lifi-composer.ts]
+    HPLAN --> DEP
+
+    BURN --> BATCH[SignedBatchedCall<br/>nonceKey: migration]
+    HARVEST --> BATCH2[SignedBatchedCall<br/>nonceKey: harvest]
+    SWAP --> BATCH
+    SWAP --> BATCH2
+    DEP --> BATCH
+    DEP --> BATCH2
+
     BATCH --> RELAY[Keeper signs as agent key]
+    BATCH2 --> RELAY
     RELAY --> ONCHAIN[Single tx on Base]
 
-    style POS fill:#FF007A,color:#fff
+    style OOR fill:#dc2626,color:#fff
+    style INR fill:#16a34a,color:#fff
     style ONCHAIN fill:#0052FF,color:#fff
     style BATCH fill:#9C27B0,color:#fff
+    style BATCH2 fill:#FF007A,color:#fff
 ```
+
+Both modes share the swap + deposit legs. Only the **first leg** differs (full burn vs. fee-only collect), and they use **distinct nonce keys** in Calibur (`migration: 2n` vs `harvest: 5n`) so a user can have both flows in flight without sequence collisions.
 
 
 ## Setup
@@ -222,6 +290,8 @@ cp .env.example .env.local
 #   LIFI_API_KEY=your_lifi_key
 #   THEGRAPH_API_KEY=your_thegraph_key
 #   KEEPER_PRIVATE_KEY=0x...                       (relayer hot wallet, must hold ETH on Base)
+#   KEEPER_HARVEST_MIN_USD=5                        (optional — min accrued fees in USD before auto-harvest fires; default 5)
+#   KEEPER_HARVEST_INTERVAL_SEC=86400               (optional — minimum seconds between harvests per position; default 24h)
 
 # Start development server
 pnpm dev
@@ -236,26 +306,34 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 ### User Flow (LP Owner)
 
 ```
-Connect Wallet → Delegate (1 signature) → Pick Risk Profile → Watch Agent → Receive Migration Tx
+Connect Wallet → Delegate (1 signature) → Pick Risk Profile → Watch Agent → Receive Migrate / Harvest Tx
 ```
 
 1. **Connect Wallet** — Uniswap Smart Wallet or Coinbase Smart Wallet (auto-delegates the EOA to Calibur on first tx)
 2. **Delegate** — sign one EIP-712 typed-data envelope; relayer submits `register()` + `update(hook)` for free
-3. **Pick Risk Profile** — Conservative / Balanced / Aggressive (drives destination vault selection)
+3. **Pick Risk Profile** — Conservative / Balanced / Aggressive (drives destination vault selection for both modes)
 4. **Watch** — dashboard shows live positions, holdings, agent status (Watching / Connecting), last keeper tick
-5. **Receive** — when a position goes out-of-range, agent migrates it; user sees a toast with BaseScan link to the batched tx
+5. **Receive** — agent acts based on each position's status:
+   - **out-of-range** → atomic migration; toast: "Migration submitted" + BaseScan link
+   - **in-range with ≥$5 fees** → atomic harvest every 24h; toast: "Fees harvested" + BaseScan link
+
+Users can also **manually trigger** either action from each position card (`Migrate Position` button on out-of-range cards, `Harvest fees` button on in-range cards with the live USD amount).
 
 ### Agent Flow (Keeper)
 
 ```
-Poll Positions → Detect Out-of-Range → Build Plan → Sign as Agent → Relay
+Poll Positions → Branch on Status → Build Plan → Sign as Agent → Relay
 ```
 
 1. **Poll** — every 60s (Premium: 30s) the keeper reads each subscribed user's Uniswap positions on-chain
-2. **Detect** — flags any position whose current tick is outside `[tickLower, tickUpper]`
-3. **Plan** — builds a `MigrationPlan`: burn calldata + Trading API swap calldata + Li.Fi Composer deposit calldata
-4. **Sign** — wraps all legs in a `SignedBatchedCall` with `keyHash = agentKey`, signs with the keeper private key
+2. **Branch** — for each position:
+   - **out-of-range** → enter migrate path (existing logic, 1h cooldown per `tokenId`)
+   - **in-range** → enter harvest path: skip if accrued fees < `KEEPER_HARVEST_MIN_USD` (default $5), skip if cooldown active (24h, key `harvest:{tokenId}`), otherwise plan + sign + relay
+3. **Plan** — builds a `MigrationPlan` (intent: `migrate` | `harvest`): first-leg calldata (burn or harvest) + Trading API swap calldata + Li.Fi Composer deposit calldata
+4. **Sign** — wraps all legs in a `SignedBatchedCall` with `keyHash = agentKey`, distinct `nonceKey` per intent (migration `2n` / harvest `5n`)
 5. **Relay** — submits to user's EOA address (Calibur lives at user's bytecode under EIP-7702); keeper pays gas
+
+Activity log entries differentiate the two: `Auto-migrate` records the moved tokenId and destination; `Auto-harvest` records the fees USD collected and the vault.
 
 ### On-Chain Flow
 
@@ -269,11 +347,16 @@ User signs typed-data ─────────►   │                      
    │                               │                            │
 Keeper signs SignedBatchedCall ─►  │                            │
    │                               ├── execute() on User EOA ──►│
-   │                               │     ├── BURN_POSITION ────►│ Uniswap v4 PositionManager
+   │                               │     ├── mode=migrate:      │
+   │                               │     │     BURN_POSITION ──►│ Uniswap v4 PositionManager
+   │                               │     ├── mode=harvest:      │
+   │                               │     │     DECREASE_LIQ=0 ─►│ Uniswap v4 PositionManager
+   │                               │     │     (or v3 collect) ►│ Uniswap v3 NonfungiblePositionManager
    │                               │     ├── SWAP ─────────────►│ Uniswap Universal Router
    │                               │     └── DEPOSIT ──────────►│ Li.Fi Diamond → Vault
    │                               │                            │
-   ◄── Vault shares + dust ETH refunded to User EOA ───────────│
+   ◄── Vault shares to User EOA. Migrate: LP NFT burned.       │
+   ◄── Harvest: LP NFT alive, only fees moved.                  │
 ```
 
 ---
@@ -286,9 +369,10 @@ Keeper signs SignedBatchedCall ─►  │                            │
 |---|---|---|
 | `CaliburExecutionHook` | configured via `NEXT_PUBLIC_CALIBUR_HOOK_ADDRESS` | Per-key validator that whitelists the function selectors MOAI's keeper is allowed to invoke |
 | `Calibur` | `0x000000009B1D0aF20D8C6d0A44e162d11F9b8f00` | Uniswap's official EIP-7702 singleton — runs as user EOA bytecode |
-| `PositionManager v4` | `0x7C5f5A4bBd8fD63184577525326123B519429bDc` | Uniswap v4 NFT manager (burn target) |
-| `Universal Router` | from Trading API response | Uniswap swap entrypoint |
-| `Li.Fi Diamond` | `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE` | Li.Fi Composer (deposit target) |
+| `PositionManager v4` | `0x7C5f5A4bBd8fD63184577525326123B519429bDc` | Uniswap v4 NFT manager — target for both burn (migrate) and `DECREASE_LIQUIDITY=0` (harvest) |
+| `NonfungiblePositionManager v3` | `0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1` | Uniswap v3 NFT manager — target for `collect()` in v3 fee harvests |
+| `Universal Router` | from Trading API response | Uniswap swap entrypoint (used in both modes) |
+| `Li.Fi Diamond` | `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE` | Li.Fi Composer (deposit target — both modes) |
 
 ### Key Functions
 
@@ -303,13 +387,40 @@ removeFromAllowlist(keyHash, target, selector)          — Owner revokes an all
 #### Frontend service modules
 
 ```
-buildRegistrationBatch(userEoa, agentAddr, hookAddr)    — typed-data for one-shot delegation
-buildAgentBatch(userEoa, calls)                         — typed-data for migration / withdrawal
-relaySignedBatch(userEoa, signedBatchedCall, sig)       — relayer submits Calibur.execute
-encodeV4BurnCalldata({tokenId, currency0, currency1})   — v4 burn with native pool SWEEP support
+buildRegistrationBatch(userEoa, agentAddr, hookAddr)        — typed-data for one-shot delegation
+buildAgentBatch(userEoa, calls, { nonceKey })               — typed-data for migrate / harvest / withdrawal (distinct nonce keys per intent)
+relaySignedBatch(userEoa, signedBatchedCall, sig)           — relayer submits Calibur.execute
+encodeV4BurnCalldata({tokenId, currency0, currency1, …})    — v4 BURN_POSITION + TAKE_PAIR (+SWEEP for native pools)
+encodeV4HarvestCalldata({tokenId, currency0, currency1, …}) — v4 DECREASE_LIQUIDITY=0 + TAKE_PAIR (+SWEEP) — fees only, LP preserved
+encodeV3HarvestCalldata({tokenId, recipient})               — v3 NonfungiblePositionManager.collect()
+buildMigrationPlan(owner, tokenId, …)                       — out-of-range plan
+buildHarvestPlan(owner, tokenId, …)                         — in-range plan (rejects out-of-range positions and below-threshold fees)
 ```
 
 > For full integration details and EIP-712 envelope structure, see [`frontend/src/lib/calibur/`](./frontend/src/lib/calibur/).
+
+---
+
+## Deployment Checklist
+
+- [x] Deploy `CaliburExecutionHook` to Base Mainnet
+- [x] Frontend wallet integration (RainbowKit + Smart Wallet auto-delegation)
+- [x] EIP-712 typed-data signing flow (register / revoke / migrate / harvest)
+- [x] Relayer-funded gas pipeline (`KEEPER_PRIVATE_KEY` hot wallet)
+- [x] Uniswap v3 + v4 position discovery (subgraph + on-chain)
+- [x] Trading API integration (`/check_approval` + `/quote` + `/swap`) — used in both migrate and harvest
+- [x] Li.Fi Earn destination vault planner (35+ Base vaults)
+- [x] Risk-profile-aware vault selection (Conservative / Balanced / Aggressive)
+- [x] **Migrate mode** — atomic burn → swap → deposit on out-of-range positions
+- [x] **Harvest mode** — atomic fee collect (v4 `DECREASE_LIQUIDITY=0` / v3 `collect()`) → swap → deposit on in-range positions
+- [x] **Auto-harvest keeper** with $5 threshold + 24h cooldown (env-tunable)
+- [x] Manual `Harvest fees` CTA per in-range card
+- [x] Withdrawal flow (vault → wallet via Li.Fi Composer)
+- [x] Lottie-animated success / agent-active / migration-plan iconography
+- [x] Dark mode with persisted preference
+- [ ] MOAI Swarm: cross-user batched migrations
+- [ ] Indexing API + Gas API integration
+- [ ] Premium tier (sub-30s keeper polling, multi-wallet)
 
 ---
 
